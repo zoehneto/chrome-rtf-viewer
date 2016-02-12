@@ -7,26 +7,33 @@ function stringToBinaryArray(string) {
     return buffer;
 }
 
+function renderDocument(data){
+    try {
+        var doc = new RTFJS.Document(stringToBinaryArray(data));
+
+        //Set title if meta data available
+        var meta = doc.metadata();
+        if(meta.title !== undefined && meta.title !== ""){
+            document.title = meta.title;
+        }
+
+        //Display document
+        $("#main").empty().append(doc.render());
+    }catch (error) {
+        if (error instanceof RTFJS.Error) {
+            $("#main").text("Error: " + error.message);
+        } else {
+            throw error;
+        }
+    }
+}
+
 function loadData(){
     var xhr = new XMLHttpRequest();
     xhr.open("GET", decodeURIComponent(window.location.search.replace("?file=","")), true);
     xhr.onreadystatechange = function() {
         if (xhr.readyState == 4) {
-            try {
-                var doc = new RTFJS.Document(stringToBinaryArray(xhr.response));
-                var meta = doc.metadata();
-                if(meta.title !== undefined && meta.title !== ""){
-                    document.title = meta.title;
-                }
-
-                $("#main").empty().append(doc.render());
-            }catch (error) {
-                if (error instanceof RTFJS.Error) {
-                    $("#main").text("Error: " + error.message);
-                } else {
-                    throw error;
-                }
-            }
+            renderDocument(xhr.responseText);
         }
     };
     xhr.send();
