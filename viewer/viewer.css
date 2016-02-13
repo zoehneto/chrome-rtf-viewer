@@ -1,3 +1,13 @@
+#main{
+    background-color: white;
+    margin: auto;
+    padding: 5px 20px;
+    box-shadow: 0 1px 1.5px 3px #E6E1E1;
+
+    /*Default document width per RTF 1.9 spec (12240 twips)*/
+    width: 816px;
+}
+
 span{
     white-space: pre-wrap;
 }
