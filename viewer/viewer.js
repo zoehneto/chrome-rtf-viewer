@@ -1,3 +1,16 @@
+/*
+ * Global Objects
+ */
+var rtfData = {
+    name: "",
+    data: ""
+};
+
+
+
+/*
+ * Document display functions
+ */
 function stringToBinaryArray(string) {
     var buffer = new ArrayBuffer(string.length);
     var bufferView = new Uint8Array(buffer);
@@ -29,14 +42,41 @@ function renderDocument(data){
 }
 
 function loadData(){
+    var rtfUrl = decodeURIComponent(window.location.search.replace("?file=",""));
     var xhr = new XMLHttpRequest();
-    xhr.open("GET", decodeURIComponent(window.location.search.replace("?file=","")), true);
+    xhr.open("GET", rtfUrl, true);
     xhr.onreadystatechange = function() {
         if (xhr.readyState == 4) {
+            //Save data for later use
+            rtfData.name = rtfUrl.substring(rtfUrl.lastIndexOf("/") + 1);
+            rtfData.data = xhr.responseText;
+
+            //Render document
             renderDocument(xhr.responseText);
         }
     };
     xhr.send();
 }
 
-document.addEventListener('DOMContentLoaded', loadData, true);
+
+
+/*
+ * Toolbar functionality
+ */
+function downloadRtfFile(event){
+    var blob = new Blob([rtfData.data], {type: "text/rtf"});
+    var url = URL.createObjectURL(blob);
+    var a = event.target;
+    a.href = url;
+    a.download = rtfData.name;
+}
+
+
+
+/*
+ * Event listeners
+ */
+document.addEventListener('DOMContentLoaded', function(){
+    document.getElementById("download").addEventListener("click", downloadRtfFile);
+    loadData();
+}, true);
