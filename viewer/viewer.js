@@ -28,6 +28,8 @@ function renderDocument(data){
         var meta = doc.metadata();
         if(meta.title !== undefined && meta.title !== ""){
             document.title = meta.title;
+        }else{
+            document.title = rtfData.name;
         }
 
         //Display document
