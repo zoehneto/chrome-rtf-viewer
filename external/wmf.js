@@ -191,6 +191,51 @@ if (typeof WMFJS === 'undefined') {
 				COLORONCOLOR: 3,
 				HALFTONE: 4
 			},
+			TextAlignmentMode: {
+				TA_UPDATECP: 1,
+				TA_RIGHT: 2,
+				TA_CENTER: 6,
+				TA_BOTTOM: 8,
+				TA_BASELINE: 24,
+				TA_RTLREADING: 256
+			},
+			MixMode: {
+				TRANSPARENT: 1,
+				OPAQUE: 2
+			},
+			VerticalTextAlignmentMode: {
+				VTA_BOTTOM: 2,
+				VTA_CENTER: 6,
+				VTA_LEFT: 8,
+				VTA_BASELINE: 24
+			},
+			BrushStyle: {
+				BS_SOLID: 0,
+				BS_NULL: 1,
+				BS_HATCHED: 2,
+				BS_PATTERN: 3,
+				BS_INDEXED: 4,
+				BS_DIBPATTERN: 5,
+				BS_DIBPATTERNPT: 6,
+				BS_PATTERN8X8: 7,
+				BS_DIBPATTERN8X8: 8,
+				BS_MONOPATTERN: 9
+			},
+			PenStyle: {
+				PS_SOLID: 0,
+				PS_DASH: 1,
+				PS_DOT: 2,
+				PS_DASHDOT: 3,
+				PS_DASHDOTDOT: 4,
+				PS_NULL: 5,
+				PS_INSIDEFRAME: 6,
+				PS_USERSTYLE: 7,
+				PS_ALTERNATE: 8,
+				PS_ENDCAP_SQUARE: 256,
+				PS_ENDCAP_FLAT: 512,
+				PS_JOIN_BEVE: 4096,
+				PS_JOIN_MITER: 8192
+			},
 			BitmapCompression: {
 				BI_RGB: 0,
 				BI_RLE8: 1,
@@ -259,6 +304,16 @@ WMFJS.Blob.prototype.readBinary = function(cnt) {
 	return ret;
 };
 
+WMFJS.Blob.prototype.readInt8 = function() {
+	if (this.pos + 1 > this.data.length)
+		throw new WMFJS.Error("Unexpected end of file");
+	return this.data[this.pos++];
+};
+
+WMFJS.Blob.prototype.readUint8 = function() {
+	return this.readInt8() >>> 0;
+};
+
 WMFJS.Blob.prototype.readInt32 = function() {
 	if (this.pos + 4 > this.data.length)
 		throw new WMFJS.Error("Unexpected end of file");
@@ -286,6 +341,233 @@ WMFJS.Blob.prototype.readInt16 = function() {
 	if (val > 32767)
 		val -= 65536;
 	return val;
+};
+
+WMFJS.Blob.prototype.readNullTermString = function(maxSize) {
+	var ret = "";
+	if (maxSize > 0) {
+		maxSize--;
+		for (var i = 0; i < maxSize; i++) {
+			if (this.pos + i + 1 > this.data.length)
+				throw new WMFJS.Error("Unexpected end of file");
+			var byte = this.data[this.pos + i] >>> 0;
+			if (byte == 0)
+				break;
+			ret += String.fromCharCode(byte);
+		}
+	}
+	return ret;
+};
+
+WMFJS.ColorRef = function(reader, r, g, b) {
+	if (reader != null) {
+		this.r = reader.readUint8();
+		this.g = reader.readUint8();
+		this.b = reader.readUint8();
+		reader.skip(1);
+	} else {
+		this.r = r;
+		this.g = g;
+		this.b = b;
+	}
+};
+
+WMFJS.ColorRef.prototype.clone = function() {
+	return new WMFJS.ColorRef(null, this.r, this.g, this.b);
+};
+
+WMFJS.ColorRef.prototype.toHex = function() {
+	var rgb = (this.b << 16) | (this.g << 8) | this.b;
+	return (0x1000000 + rgb).toString(16).slice(1);
+};
+
+WMFJS.ColorRef.prototype.toString = function() {
+	return "{r: " + this.r + ", g: " + this.g + ", b: " + this.b + "}";
+};
+
+WMFJS.PointS = function(reader, x, y) {
+	if (reader != null) {
+		this.x = reader.readInt16();
+		this.y = reader.readInt16();
+	} else {
+		this.x =  x;
+		this.y = y;
+	}
+};
+
+WMFJS.PointS.prototype.clone = function() {
+	return new WMFJS.PointS(null, this.x, this.y);
+};
+
+WMFJS.PointS.prototype.toString = function() {
+	return "{x: " + this.x + ", y: " + this.y + "}";
+};
+
+WMFJS.Obj = function(type) {
+	this.type = type;
+}
+
+WMFJS.Obj.prototype.clone = function() {
+	throw new WMFJS.Error("clone not implemented");
+}
+
+WMFJS.Obj.prototype.toString = function() {
+	throw new WMFJS.Error("toString not implemented");
+}
+
+WMFJS.Font = function(reader, copy) {
+	WMFJS.Obj.call(this, "font");
+	if (reader != null) {
+		this.height = reader.readInt16();
+		this.width = reader.readInt16();
+		this.escapement = reader.readInt16();
+		this.orientation = reader.readInt16();
+		this.weight = reader.readInt16();
+		this.italic = reader.readUint8();
+		this.underline = reader.readUint8();
+		this.strikeout = reader.readUint8();
+		this.charset = reader.readUint8();
+		this.outprecision = reader.readUint8();
+		this.clipprecision = reader.readUint8();
+		this.quality = reader.readUint8();
+		var pitchAndFamily = reader.readUint8();
+		this.pitch = pitchAndFamily & 0xf; // TODO: double check
+		this.family = (pitchAndFamily >> 6) & 0x3; // TODO: double check
+		
+		var dataLength = copy;
+		var start = reader.pos;
+		this.facename = reader.readNullTermString(Math.min(dataLength - (reader.pos - start), 32));
+	} else if (copy != null) {
+		this.height = copy.height;
+		this.width = copy.width;
+		this.escapement = copy.escapement;
+		this.orientation = copy.orientation;
+		this.weight = copy.weight;
+		this.italic = copy.italic;
+		this.underline = copy.underline;
+		this.strikeout = copy.strikeout;
+		this.charset = copy.charset;
+		this.outprecision = copy.outprecision;
+		this.clipprecision = copy.clipprecision;
+		this.quality = copy.quality;
+		this.pitch = copy.pitch;
+		this.family = copy.family;
+		this.facename = copy.facename;
+	} else {
+		// TODO: Values for a default font?
+		this.height = -80;
+		this.width = 0;
+		this.escapement = 0;
+		this.orientation = 0;
+		this.weight = 400;
+		this.italic = 0;
+		this.underline = 0;
+		this.strikeout = 0;
+		this.charset = 0;
+		this.outprecision = 0;
+		this.clipprecision = 0;
+		this.quality = 0;
+		this.pitch = 0;
+		this.family = 0;
+		this.facename = "Helvetica";
+	}
+};
+WMFJS.Font.prototype = Object.create(WMFJS.Obj.prototype);
+
+WMFJS.Font.prototype.clone = function() {
+	return new WMFJS.Font(null, this);
+};
+
+WMFJS.Font.prototype.toString = function() {
+	//return "{facename: " + this.facename + ", height: " + this.height + ", width: " + this.width + "}";
+	return JSON.stringify(this);
+};
+
+WMFJS.Brush = function(reader, copy) {
+	WMFJS.Obj.call(this, "brush");
+	if (reader != null) {
+		var dataLength = copy;
+		var start = reader.pos;
+		this.style = reader.readUint16();
+		switch (this.style) {
+			case WMFJS.GDI.BrushStyle.BS_SOLID:
+				this.color = new WMFJS.ColorRef(reader);
+				break;
+			case WMFJS.GDI.BrushStyle.BS_PATTERN:
+				reader.skip(4);
+				this.pattern = new WMFJS.Bitmap16(reader, dataLength - (reader.pos - start));
+				break;
+			case WMFJS.GDI.BrushStyle.BS_DIBPATTERNPT:
+				this.colorusage = reader.readUint32();
+				this.dibpatternpt = new WMFJS.DIBitmap(reader, dataLength - (reader.pos - start));
+				break;
+			case WMFJS.GDI.BrushStyle.BS_HATCHED:
+				this.color = new WMFJS.ColorRef(reader);
+				this.hatchstyle = reader.readUint16();
+				break;
+		}
+	} else {
+		this.style = copy.style;
+		switch (this.style) {
+			case WMFJS.GDI.BrushStyle.BS_SOLID:
+				this.color = copy.color.clone();
+				break;
+			case WMFJS.GDI.BrushStyle.BS_PATTERN:
+				this.pattern = copy.pattern.clone();
+				break;
+			case WMFJS.GDI.BrushStyle.BS_DIBPATTERNPT:
+				this.colorusage = copy.colorusage;
+				this.dibpatternpt = copy.dibpatternpt;
+				break;
+			case WMFJS.GDI.BrushStyle.BS_HATCHED:
+				this.color = copy.color.clone();
+				this.hatchstyle = copy.hatchstyle;
+				break;
+		}
+	}
+};
+WMFJS.Brush.prototype = Object.create(WMFJS.Obj.prototype);
+
+WMFJS.Brush.prototype.clone = function() {
+	return new WMFJS.Brush(null, this);
+};
+
+WMFJS.Brush.prototype.toString = function() {
+	var ret = "{style: " + this.style;
+	switch (this.style) {
+		case WMFJS.GDI.BrushStyle.BS_SOLID:
+			ret += ", color: " + this.color.toString();
+			break
+		case WMFJS.GDI.BrushStyle.BS_DIBPATTERNPT:
+			ret += ", colorusage: " + this.colorusage;
+			break;
+		case WMFJS.GDI.BrushStyle.BS_HATCHED:
+			ret += ", color: " + this.color.toString() + ", hatchstyle: " + this.hatchstyle;
+			break;
+	}
+	return ret + "}";
+};
+
+WMFJS.Pen = function(reader, style, width, color) {
+	WMFJS.Obj.call(this, "pen");
+	if (reader != null) {
+		this.style = reader.readUint16();
+		this.width = new WMFJS.PointS(reader);
+		this.color = new WMFJS.ColorRef(reader);
+	} else {
+		this.style = style;
+		this.width = width;
+		this.color = color;
+	}
+};
+WMFJS.Pen.prototype = Object.create(WMFJS.Obj.prototype);
+
+WMFJS.Pen.prototype.clone = function() {
+	return new WMFJS.Pen(null, this.style, this.width.clone(), this.color.clone());
+};
+
+WMFJS.Pen.prototype.toString = function() {
+	return "{style: " + this.style + ", width: " + this.width.toString() + ", color: " + this.color.toString() + "}";
 };
 
 WMFJS.BitmapCoreHeader = function(reader, skipsize) {
@@ -399,11 +681,30 @@ WMFJS.DIBitmap.prototype.base64ref = function() {
 	return ref;
 };
 
-WMFJS.GDIContextState = function(copy) {
+WMFJS.Bitmap16 = function(reader, size) {
+	this._reader = reader;
+	this._offset = reader.pos;
+	this._size = size;
+	this.type = reader.readInt16();
+	this.width = reader.readInt16();
+	this.height = reader.readInt16();
+	this.widthBytes = reader.readInt16();
+	this.planes = reader.readUint8();
+	this.bitsPixel = reader.readUint8();
+	this.bitsSize = (((this.width * this.bitsPixel + 10) >> 4) << 1) * this.height;
+	if (this.bitsSize != size - 10)
+		throw new WMFJS.Error("Bitmap should have " + this.bitsSize + " bytes, but has " + (size - 10));
+};
+
+WMFJS.GDIContextState = function(copy, defObjects) {
 	if (copy != null) {
 		this._svggroup = copy._svggroup;
 		this.mapmode = copy.mapmode;
 		this.stretchmode = copy.stretchmode;
+		this.textalign = copy.textalign;
+		this.bkmode = copy.bkmode;
+		this.textcolor = copy.textcolor.clone();
+		this.bkcolor = copy.bkcolor.clone();
 		this.wx = copy.wx;
 		this.wy = copy.wy;
 		this.ww = copy.ww;
@@ -412,10 +713,18 @@ WMFJS.GDIContextState = function(copy) {
 		this.vy = copy.vy;
 		this.vw = copy.vw;
 		this.vh = copy.vh;
+		
+		this.selected = {};
+		for (var type in copy.selected)
+			this.selected[type] = copy.selected[type];
 	} else {
 		this._svggroup = null;
 		this.mapmode = WMFJS.GDI.MapMode.MM_ANISOTROPIC;
 		this.stretchmode = WMFJS.GDI.StretchMode.COLORONCOLOR;
+		this.textalign = 0; // TA_LEFT | TA_TOP | TA_NOUPDATECP
+		this.bkmode = WMFJS.GDI.MixMode.OPAQUE;
+		this.textcolor = new WMFJS.ColorRef(null, 0, 0, 0);
+		this.bkcolor = new WMFJS.ColorRef(null, 255, 255, 255);
 		this.wx = 0;
 		this.wy = 0;
 		this.ww = 0;
@@ -424,13 +733,25 @@ WMFJS.GDIContextState = function(copy) {
 		this.vy = 0;
 		this.vw = 0;
 		this.vh = 0;
+		
+		this.selected = {};
+		for (var type in defObjects)
+			this.selected[type] = defObjects[type].clone();
 	}
 }
 
 WMFJS.GDIContext = function(svg) {
 	this._svg = svg;
-	this.state = new WMFJS.GDIContextState(null);
+	
+	this.defObjects = {
+		brush: new WMFJS.Brush(null, WMFJS.GDI.BrushStyle.BS_SOLID, new WMFJS.ColorRef(null, 0, 0, 0)),
+		pen: new WMFJS.Pen(null, WMFJS.GDI.PenStyle.PS_SOLID, new WMFJS.PointS(null, 1, 1), new WMFJS.ColorRef(null, 0, 0, 0)),
+		font: new WMFJS.Font(null, null)
+	};
+	
+	this.state = new WMFJS.GDIContextState(null, this.defObjects);
 	this.statestack = [this.state];
+	this.objects = {};
 };
 
 WMFJS.GDIContext.prototype._pushGroup = function() {
@@ -443,6 +764,46 @@ WMFJS.GDIContext.prototype._pushGroup = function() {
 		this.state._svggroup = this._svg.svg(this.state._svggroup,
 			this.state.vx, this.state.vy, this.state.vw, this.state.vh, this.state.vx, this.state.vy, this.state.vw, this.state.vh, settings);
 	}
+};
+
+WMFJS.GDIContext.prototype._storeObject = function(obj) {
+	var i = 0;
+	while (this.objects[i.toString()] != null && i <= 65535)
+		i++;
+	if (i > 65535) {
+		console.log("[gdi] Too many objects!");
+		return -1;
+	}
+	
+	this.objects[i.toString()] = obj;
+	return i;
+};
+
+WMFJS.GDIContext.prototype._getObject = function(objIdx) {
+	var obj = this.objects[objIdx.toString()];
+	if (obj == null)
+		console.log("[gdi] No object with handle " + objIdx);
+	return obj;
+}
+
+WMFJS.GDIContext.prototype._selectObject = function(obj) {
+	this.state.selected[obj.type] = obj;
+};
+
+WMFJS.GDIContext.prototype._deleteObject = function(objIdx) {
+	var obj = this.objects[objIdx.toString()];
+	if (obj != null) {
+		for (var i = 0; i < this.statestack.length; i++) {
+			var state = this.statestack[i];
+			if (state.selected[obj.type] == obj)
+				state.selected[obj.type] = this.defObjects[obj.type].clone();
+		}
+		delete this.objects[objIdx.toString()];
+		return true;
+	}
+	
+	console.log("[gdi] Cannot delete object with invalid handle " + objIdx);
+	return false;
 };
 
 WMFJS.GDIContext.prototype._todevX = function(val) {
@@ -560,6 +921,21 @@ WMFJS.GDIContext.prototype.setStretchBltMode = function(stretchMode) {
 	console.log("[gdi] setStretchBltMode: stretchMode=" + stretchMode);
 };
 
+WMFJS.GDIContext.prototype.stretchDib = function(srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH, rasterOp, colorUsage, dib) {
+	console.log("[gdi] stretchDibBits: srcX=" + srcX + " srcY=" + srcY + " srcW=" + srcW + " srcH=" + srcH + " dstX=" + dstX + " dstY=" + dstY + " dstW=" + dstW + " dstH=" + dstH + " rasterOp=0x" + rasterOp.toString(16));
+	srcX = this._todevX(srcX);
+	srcY = this._todevY(srcY);
+	srcW = this._todevW(srcW);
+	srcH = this._todevH(srcH);
+	dstX = this._todevX(dstX);
+	dstY = this._todevY(dstY);
+	dstW = this._todevW(dstW);
+	dstH = this._todevH(dstH);
+	console.log("[gdi] stretchDib: TRANSLATED: srcX=" + srcX + " srcY=" + srcY + " srcW=" + srcW + " srcH=" + srcH + " dstX=" + dstX + " dstY=" + dstY + " dstW=" + dstW + " dstH=" + dstH + " rasterOp=0x" + rasterOp.toString(16) + " colorUsage=0x" + colorUsage.toString(16));
+	this._pushGroup();
+	this._svg.image(this.state._svggroup, dstX, dstY, dstW, dstH, dib.base64ref());
+};
+
 WMFJS.GDIContext.prototype.stretchDibBits = function(srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH, rasterOp, dib) {
 	console.log("[gdi] stretchDibBits: srcX=" + srcX + " srcY=" + srcY + " srcW=" + srcW + " srcH=" + srcH + " dstX=" + dstX + " dstY=" + dstY + " dstW=" + dstW + " dstH=" + dstH + " rasterOp=0x" + rasterOp.toString(16));
 	srcX = this._todevX(srcX);
@@ -575,19 +951,69 @@ WMFJS.GDIContext.prototype.stretchDibBits = function(srcX, srcY, srcW, srcH, dst
 	this._svg.image(this.state._svggroup, dstX, dstY, dstW, dstH, dib.base64ref());
 };
 
-WMFJS.GDIContext.prototype.stretchDib = function(srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH, rasterOp, colorUsage, dib) {
-	console.log("[gdi] stretchDibBits: srcX=" + srcX + " srcY=" + srcY + " srcW=" + srcW + " srcH=" + srcH + " dstX=" + dstX + " dstY=" + dstY + " dstW=" + dstW + " dstH=" + dstH + " rasterOp=0x" + rasterOp.toString(16));
-	srcX = this._todevX(srcX);
-	srcY = this._todevY(srcY);
-	srcW = this._todevW(srcW);
-	srcH = this._todevH(srcH);
-	dstX = this._todevX(dstX);
-	dstY = this._todevY(dstY);
-	dstW = this._todevW(dstW);
-	dstH = this._todevH(dstH);
-	console.log("[gdi] stretchDib: TRANSLATED: srcX=" + srcX + " srcY=" + srcY + " srcW=" + srcW + " srcH=" + srcH + " dstX=" + dstX + " dstY=" + dstY + " dstW=" + dstW + " dstH=" + dstH + " rasterOp=0x" + rasterOp.toString(16) + " colorUsage=0x" + colorUsage.toString(16));
+WMFJS.GDIContext.prototype.rectangle = function(bottom, right, top, left) {
+	console.log("[gdi] rectangle: bottom=" + bottom + " right=" + right + " top=" + top + " left=" + left + " with pen " + this.state.selected.pen.toString() + " and brush " + this.state.selected.brush.toString());
+	var height = this._todevH(bottom - top);
+	var width = this._todevW(right - left);
+	top = this._todevY(top);
+	left = this._todevX(left);
+	console.log("[gdi] rectangle: TRANSLATED: height=" + height + " width=" + width + " top=" + top + " left=" + left);
 	this._pushGroup();
-	this._svg.image(this.state._svggroup, dstX, dstY, dstW, dstH, dib.base64ref());
+	
+	var opts = {
+		stroke: "#" + this.state.selected.pen.color.toHex(), // TODO: pen style
+		strokeWidth: this.state.selected.pen.width.x // TODO: is .y ever used?
+	}
+	if (this.state.selected.brush.color != null)
+		opts.fill = "#" + this.state.selected.brush.color.toHex(); // TODO: brush style
+	this._svg.rect(this.state._svggroup, left, top, width, height, 0, 0, opts);
+};
+
+WMFJS.GDIContext.prototype.setTextAlign = function(textAlignmentMode) {
+	console.log("[gdi] setTextAlign: textAlignmentMode=0x" + textAlignmentMode.toString(16));
+	this.state.textalign = textAlignmentMode;
+};
+
+WMFJS.GDIContext.prototype.setBkMode = function(bkMode) {
+	console.log("[gdi] setBkMode: bkMode=0x" + bkMode.toString(16));
+	this.state.bkmode = bkMode;
+};
+
+WMFJS.GDIContext.prototype.setTextColor = function(textColor) {
+	console.log("[gdi] setTextColor: textColor=" + textColor.toString());
+	this.state.textcolor = textColor;
+};
+
+WMFJS.GDIContext.prototype.setBkColor = function(bkColor) {
+	console.log("[gdi] setBkColor: bkColor=" + bkColor.toString());
+	this.state.bkcolor = bkColor;
+};
+
+WMFJS.GDIContext.prototype.createBrush = function(brush) {
+	var idx = this._storeObject(brush);
+	console.log("[gdi] createBrush: brush=" + brush.toString() + " with handle " + idx);
+};
+
+WMFJS.GDIContext.prototype.createFont = function(font) {
+	var idx = this._storeObject(font);
+	console.log("[gdi] createFont: font=" + font.toString() + " with handle " + idx);
+};
+
+WMFJS.GDIContext.prototype.createPen = function(pen) {
+	var idx = this._storeObject(pen);
+	console.log("[gdi] createPen: pen=" + pen.toString() + " width handle " + idx);
+};
+
+WMFJS.GDIContext.prototype.selectObject = function(objIdx) {
+	var obj = this._getObject(objIdx);
+	if (obj != null)
+		this._selectObject(obj);
+	console.log("[gdi] selectObject: objIdx=" + objIdx + (obj ? " selected " + obj.type + ": " + obj.toString() : "[invalid index]"));
+};
+
+WMFJS.GDIContext.prototype.deleteObject = function(objIdx) {
+	var ret = this._deleteObject(objIdx);
+	console.log("[gdi] deleteObject: objIdx=" + objIdx + (ret ? " deleted object" : "[invalid index]"));
 };
 
 WMFJS.WMFRect16 = function(reader) {
@@ -618,23 +1044,35 @@ WMFJS.WMFRecords = function(reader, first) {
 				break main_loop;
 			case WMFJS.GDI.RecordType.META_SETMAPMODE:
 				var mapMode = reader.readUint16();
-				this._records.push(function(gdi) {
-					gdi.setMapMode(mapMode);
-				});
+				this._records.push(
+					(function(mapMode) {
+						return function(gdi) {
+							gdi.setMapMode(mapMode);
+						}
+					})(mapMode)
+				);
 				break;
 			case WMFJS.GDI.RecordType.META_SETWINDOWORG:
 				var y = reader.readInt16();
 				var x = reader.readInt16();
-				this._records.push(function(gdi) {
-					gdi.setWindowOrg(x, y);
-				});
+				this._records.push(
+					(function(y, x) {
+						return function(gdi) {
+							gdi.setWindowOrg(x, y);
+						}
+					})(y, x)
+				);
 				break;
 			case WMFJS.GDI.RecordType.META_SETWINDOWEXT:
 				var y = reader.readInt16();
 				var x = reader.readInt16();
-				this._records.push(function(gdi) {
-					gdi.setWindowExt(x, y);
-				});
+				this._records.push(
+					(function(y, x) {
+						return function(gdi) {
+							gdi.setWindowExt(x, y);
+						}
+					})(y, x)
+				);
 				break;
 			case WMFJS.GDI.RecordType.META_SAVEDC:
 				this._records.push(function(gdi) {
@@ -643,15 +1081,23 @@ WMFJS.WMFRecords = function(reader, first) {
 				break;
 			case WMFJS.GDI.RecordType.META_RESTOREDC:
 				var saved = reader.readInt16();
-				this._records.push(function(gdi) {
-					gdi.restoreDC(saved);
-				});
+				this._records.push(
+					(function(saved) {
+						return function(gdi) {
+							gdi.restoreDC(saved);
+						}
+					})(saved)
+				);
 				break;
 			case WMFJS.GDI.RecordType.META_SETSTRETCHBLTMODE:
 				var stretchMode = reader.readUint16();
-				this._records.push(function(gdi) {
-					gdi.setStretchBltMode(stretchMode);
-				});
+				this._records.push(
+					(function(stretchMode) {
+						return function(gdi) {
+							gdi.setStretchBltMode(stretchMode);
+						}
+					})(stretchMode)
+				);
 				break;
 			case WMFJS.GDI.RecordType.META_DIBSTRETCHBLT:
 				var haveSrcDib = ((type >> 8) + 3 != size);
@@ -666,9 +1112,13 @@ WMFJS.WMFRecords = function(reader, first) {
 				var destX = reader.readInt16();
 				var datalength = size * 2 - (reader.pos - curpos);
 				var dib = new WMFJS.DIBitmap(reader, datalength);
-				this._records.push(function(gdi) {
-					gdi.stretchDibBits(srcX, srcY, srcW, srcH, destX, destY, destW, destH, rasterOp, dib);
-				});
+				this._records.push(
+					(function(rasterOp, srcH, srcW, srcY, srcX, destH, destW, destY, destX, dib) {
+						return function(gdi) {
+							gdi.stretchDibBits(srcX, srcY, srcW, srcH, destX, destY, destW, destH, rasterOp, dib);
+						}
+					})(rasterOp, srcH, srcW, srcY, srcX, destH, destW, destY, destX, dib)
+				);
 				break;
 			case WMFJS.GDI.RecordType.META_STRETCHDIB:
 				var rasterOp = reader.readUint16() | (reader.readUint16() << 16);
@@ -683,22 +1133,134 @@ WMFJS.WMFRecords = function(reader, first) {
 				var destX = reader.readInt16();
 				var datalength = size * 2 - (reader.pos - curpos);
 				var dib = new WMFJS.DIBitmap(reader, datalength);
-				this._records.push(function(gdi) {
-					gdi.stretchDib(srcX, srcY, srcW, srcH, destX, destY, destW, destH, rasterOp, colorUsage, dib);
-				});
+				this._records.push(
+					(function(rasterOp, colorUsage, srcH, srcW, srcY, srcX, destH, destW, destY, destX, dib) {
+						return function(gdi) {
+							gdi.stretchDib(srcX, srcY, srcW, srcH, destX, destY, destW, destH, rasterOp, colorUsage, dib);
+						}
+					})(rasterOp, colorUsage, srcH, srcW, srcY, srcX, destH, destW, destY, destX, dib)
+				);
 				break;
 			case WMFJS.GDI.RecordType.META_ESCAPE:
 				var func = reader.readUint16();
 				var count = reader.readUint16();
 				var offset = reader.pos;
 				var blob = new WMFJS.Blob(reader, offset);
-				this._records.push(function(gdi) {
-					gdi.escape(func, blob, offset, count);
-				});
+				this._records.push(
+					(function(func, count, offset, blob) {
+						return function(gdi) {
+							gdi.escape(func, blob, offset, count);
+						}
+					})(func, count, offset, blob)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_SETTEXTALIGN:
+				var textAlign = reader.readUint16();
+				this._records.push(
+					(function(textAlign) {
+						return function(gdi) {
+							gdi.setTextAlign(textAlign);
+						}
+					})(textAlign)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_SETBKMODE:
+				var bkMode = reader.readUint16();
+				this._records.push(
+					(function(bkMode) {
+						return function(gdi) {
+							gdi.setBkMode(bkMode);
+						}
+					})(bkMode)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_SETTEXTCOLOR:
+				var textColor = new WMFJS.ColorRef(reader);
+				this._records.push(
+					(function(textColor) {
+						return function(gdi) {
+							gdi.setTextColor(textColor);
+						}
+					})(textColor)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_SETBKCOLOR:
+				var bkColor = new WMFJS.ColorRef(reader);
+				this._records.push(
+					(function(bkColor) {
+						return function(gdi) {
+							gdi.setBkColor(bkColor);
+						}
+					})(bkColor)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_CREATEBRUSHINDIRECT:
+				var datalength = size * 2 - (reader.pos - curpos);
+				var brush = new WMFJS.Brush(reader, datalength);
+				this._records.push(
+					(function(brush, datalength) {
+						return function(gdi) {
+							gdi.createBrush(brush);
+						}
+					})(brush, datalength)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_CREATEPENINDIRECT:
+				var pen = new WMFJS.Pen(reader);
+				this._records.push(
+					(function(pen) {
+						return function(gdi) {
+							gdi.createPen(pen);
+						}
+					})(pen)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_CREATEFONTINDIRECT:
+				var datalength = size * 2 - (reader.pos - curpos);
+				var font = new WMFJS.Font(reader, datalength);
+				this._records.push(
+					(function(font, datalength) {
+						return function(gdi) {
+							gdi.createFont(font);
+						}
+					})(font, datalength)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_SELECTOBJECT:
+				var idx = reader.readUint16();
+				this._records.push(
+					(function(idx) {
+						return function(gdi) {
+							gdi.selectObject(idx);
+						}
+					})(idx)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_DELETEOBJECT:
+				var idx = reader.readUint16();
+				this._records.push(
+					(function(idx) {
+						return function(gdi) {
+							gdi.deleteObject(idx);
+						}
+					})(idx)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_RECTANGLE:
+				var bottom = reader.readInt16();
+				var right = reader.readInt16();
+				var top = reader.readInt16();
+				var left = reader.readInt16();
+				this._records.push(
+					(function(bottom, right, top, left) {
+						return function(gdi) {
+							gdi.rectangle(bottom, right, top, left);
+						}
+					})(bottom, right, top, left)
+				);
 				break;
 			case WMFJS.GDI.RecordType.META_REALIZEPALETTE:
 			case WMFJS.GDI.RecordType.META_SETPALENTRIES:
-			case WMFJS.GDI.RecordType.META_SETBKMODE:
 			case WMFJS.GDI.RecordType.META_SETROP2:
 			case WMFJS.GDI.RecordType.META_SETRELABS:
 			case WMFJS.GDI.RecordType.META_SETPOLYFILLMODE:
@@ -706,8 +1268,6 @@ WMFJS.WMFRecords = function(reader, first) {
 			case WMFJS.GDI.RecordType.META_RESIZEPALETTE:
 			case WMFJS.GDI.RecordType.META_DIBCREATEPATTERNBRUSH:
 			case WMFJS.GDI.RecordType.META_SETLAYOUT:
-			case WMFJS.GDI.RecordType.META_SETBKCOLOR:
-			case WMFJS.GDI.RecordType.META_SETTEXTCOLOR:
 			case WMFJS.GDI.RecordType.META_OFFSETVIEWPORTORG:
 			case WMFJS.GDI.RecordType.META_LINETO:
 			case WMFJS.GDI.RecordType.META_MOVETO:
@@ -732,7 +1292,6 @@ WMFJS.WMFRecords = function(reader, first) {
 			case WMFJS.GDI.RecordType.META_TEXTOUT:
 			case WMFJS.GDI.RecordType.META_POLYPOLYGON:
 			case WMFJS.GDI.RecordType.META_EXTFLOODFILL:
-			case WMFJS.GDI.RecordType.META_RECTANGLE:
 			case WMFJS.GDI.RecordType.META_SETPIXEL:
 			case WMFJS.GDI.RecordType.META_ROUNDRECT:
 			case WMFJS.GDI.RecordType.META_PATBLT:
@@ -741,20 +1300,14 @@ WMFJS.WMFRecords = function(reader, first) {
 			case WMFJS.GDI.RecordType.META_INVERTREGION:
 			case WMFJS.GDI.RecordType.META_PAINTREGION:
 			case WMFJS.GDI.RecordType.META_SELECTCLIPREGION:
-			case WMFJS.GDI.RecordType.META_SELECTOBJECT:
-			case WMFJS.GDI.RecordType.META_SETTEXTALIGN:
 			case WMFJS.GDI.RecordType.META_ARC:
 			case WMFJS.GDI.RecordType.META_CHORD:
 			case WMFJS.GDI.RecordType.META_BITBLT:
 			case WMFJS.GDI.RecordType.META_EXTTEXTOUT:
 			case WMFJS.GDI.RecordType.META_SETDIBTODEV:
 			case WMFJS.GDI.RecordType.META_DIBBITBLT:
-			case WMFJS.GDI.RecordType.META_DELETEOBJECT:
 			case WMFJS.GDI.RecordType.META_CREATEPALETTE:
 			case WMFJS.GDI.RecordType.META_CREATEPATTERNBRUSH:
-			case WMFJS.GDI.RecordType.META_CREATEPENINDIRECT:
-			case WMFJS.GDI.RecordType.META_CREATEFONTINDIRECT:
-			case WMFJS.GDI.RecordType.META_CREATEBRUSHINDIRECT:
 			case WMFJS.GDI.RecordType.META_CREATEREGION:
 				console.log("[WMF] record 0x" + type.toString(16) + " at offset 0x" + curpos.toString(16) + " with " + (size * 2) + " bytes");
 				break;
