@@ -236,6 +236,10 @@ if (typeof WMFJS === 'undefined') {
 				PS_JOIN_BEVE: 4096,
 				PS_JOIN_MITER: 8192
 			},
+			PolyFillMode: {
+				ALTERNATE: 1,
+				WINDING: 2
+			},
 			BitmapCompression: {
 				BI_RGB: 0,
 				BI_RLE8: 1,
@@ -247,7 +251,7 @@ if (typeof WMFJS === 'undefined') {
 		},
 		_uniqueId: 0,
 		_makeUniqueId: function(prefix) {
-			return prefix + (this._uniqueId++);
+			return "wmfjs_" + prefix + (this._uniqueId++);
 		},
 		_writeUint32Val: function(uint8arr, pos, val) {
 			uint8arr[pos++] = val & 0xff;
@@ -386,7 +390,7 @@ WMFJS.ColorRef.prototype.clone = function() {
 };
 
 WMFJS.ColorRef.prototype.toHex = function() {
-	var rgb = (this.b << 16) | (this.g << 8) | this.b;
+	var rgb = (this.r << 16) | (this.g << 8) | this.b;
 	return (0x1000000 + rgb).toString(16).slice(1);
 };
 
@@ -727,15 +731,34 @@ WMFJS.Bitmap16 = function(reader, size) {
 		throw new WMFJS.Error("Bitmap should have " + this.bitsSize + " bytes, but has " + (size - 10));
 };
 
+WMFJS.PolyPolygon = function(reader) {
+	var polygonsCnt = reader.readUint16();
+	var polygonsPtCnts = [];
+	for (var i = 0; i < polygonsCnt; i++)
+		polygonsPtCnts.push(reader.readUint16());
+	
+	this._polygons = [];
+	for (var i = 0; i < polygonsCnt; i++) {
+		var ptCnt = polygonsPtCnts[i];
+		
+		var polygon = [];
+		for (var ip = 0; ip < ptCnt; ip++)
+			polygon.push(new WMFJS.PointS(reader));
+		this._polygons.push(polygon);
+	}
+};
+
 WMFJS.GDIContextState = function(copy, defObjects) {
 	if (copy != null) {
 		this._svggroup = copy._svggroup;
+		this._svgtextbkfilter = copy._svgtextbkfilter;
 		this.mapmode = copy.mapmode;
 		this.stretchmode = copy.stretchmode;
 		this.textalign = copy.textalign;
 		this.bkmode = copy.bkmode;
 		this.textcolor = copy.textcolor.clone();
 		this.bkcolor = copy.bkcolor.clone();
+		this.polyfillmode = copy.polyfillmode;
 		this.wx = copy.wx;
 		this.wy = copy.wy;
 		this.ww = copy.ww;
@@ -756,12 +779,14 @@ WMFJS.GDIContextState = function(copy, defObjects) {
 			this.selected[type] = copy.selected[type];
 	} else {
 		this._svggroup = null;
+		this._svgtextbkfilter = null;
 		this.mapmode = WMFJS.GDI.MapMode.MM_ANISOTROPIC;
 		this.stretchmode = WMFJS.GDI.StretchMode.COLORONCOLOR;
 		this.textalign = 0; // TA_LEFT | TA_TOP | TA_NOUPDATECP
 		this.bkmode = WMFJS.GDI.MixMode.OPAQUE;
 		this.textcolor = new WMFJS.ColorRef(null, 0, 0, 0);
 		this.bkcolor = new WMFJS.ColorRef(null, 255, 255, 255);
+		this.polyfillmode = WMFJS.GDI.PolyFillMode.ALTERNATE;
 		this.wx = 0;
 		this.wy = 0;
 		this.ww = 0;
@@ -998,10 +1023,8 @@ WMFJS.GDIContext.prototype.stretchDibBits = function(srcX, srcY, srcW, srcH, dst
 };
 
 WMFJS.GDIContext.prototype._getFill = function() {
-	if (this.state.bkmode == WMFJS.GDI.MixMode.OPAQUE)
-		return "#" + this.state.bkcolor.toHex();
-	else if (this.state.selected.brush.style == WMFJS.GDI.BrushStyle.BS_SOLID)
-		return "#" + (this.state.selected.brush.color != null ? this.state.selected.brush.color.toHex() : this.state.bkcolor.toHex()); // TODO: brush styles
+	if (this.state.selected.brush.style == WMFJS.GDI.BrushStyle.BS_SOLID)
+		return "#" + this.state.selected.brush.color.toHex(); // TODO: brush styles
 	return "none";
 };
 
@@ -1032,11 +1055,22 @@ WMFJS.GDIContext.prototype.textOut = function(x, y, text) {
 	var opts = {
 		"font-family": this.state.selected.font.facename,
 		"font-size": this._todevH(Math.abs(this.state.selected.font.height)),
+		"fill": "#" + this.state.textcolor.toHex(),
 	};
 	if (this.state.selected.font.escapement != 0) {
-		// Rotate around it's center...
 		opts.transform = "rotate(" + [(-this.state.selected.font.escapement / 10), x, y] + ")";
 		opts.style = "dominant-baseline: middle; text-anchor: start;";
+	}
+	if (this.state.bkmode == WMFJS.GDI.MixMode.OPAQUE) {
+		if (this.state._svgtextbkfilter == null) {
+			var filterId = WMFJS._makeUniqueId("f");
+			var filter = this._svg.filter(this.state._svggroup, filterId, 0, 0, 1, 1);
+			this._svg.filters.flood(filter, null, "#" + this.state.bkcolor.toHex(), 1.0);
+			this._svg.filters.composite(filter, null, null, "SourceGraphic");
+			this.state._svgtextbkfilter = filter;
+		}
+		
+		opts.filter = "url(#" + $(this.state._svgtextbkfilter).attr("id") + ")";
 	}
 	this._svg.text(this.state._svggroup, x, y, text, opts);
 };
@@ -1080,6 +1114,31 @@ WMFJS.GDIContext.prototype.polygon = function(points) {
 	this._svg.polygon(this.state._svggroup, pts, opts);
 };
 
+WMFJS.GDIContext.prototype.polyPolygon = function(polyPolygon) {
+	console.log("[gdi] polyPolygon: polyPolygon=" + JSON.stringify(polyPolygon) + " with pen " + this.state.selected.pen.toString() + " and brush " + this.state.selected.brush.toString());
+	this._pushGroup();
+	var cnt = polyPolygon._polygons.length;
+	for (var i = 0; i < cnt; i++)
+		this.polygon(polyPolygon._polygons[i]);
+};
+
+WMFJS.GDIContext.prototype.polyline = function(points) {
+	console.log("[gdi] polyline: points=" + points + " with pen " + this.state.selected.pen.toString() + " and brush " + this.state.selected.brush.toString());
+	var pts = [];
+	for (var i = 0; i < points.length; i++) {
+		var point = points[i];
+		pts.push([this._todevX(point.x), this._todevY(point.y)]);
+	}
+	console.log("[gdi] polyline: TRANSLATED: pts=" + pts);
+	this._pushGroup();
+	var opts = {
+		fill: this._getFill(),
+		stroke: "#" + this.state.selected.pen.color.toHex(), // TODO: pen style
+		strokeWidth: this._todevW(this.state.selected.pen.width.x) // TODO: is .y ever used?
+	}
+	this._svg.polyline(this.state._svggroup, pts, opts);
+};
+
 WMFJS.GDIContext.prototype.excludeClipRect = function(rect) {
 	console.log("[gdi] excludeClipRect: rect=" + rect.toString());
 	this.state.clip.exclude = rect;
@@ -1110,6 +1169,12 @@ WMFJS.GDIContext.prototype.setTextColor = function(textColor) {
 WMFJS.GDIContext.prototype.setBkColor = function(bkColor) {
 	console.log("[gdi] setBkColor: bkColor=" + bkColor.toString());
 	this.state.bkcolor = bkColor;
+	this.state._svgtextbkfilter = null;
+};
+
+WMFJS.GDIContext.prototype.setPolyFillMode = function(polyFillMode) {
+	console.log("[gdi] setPolyFillMode: polyFillMode=" + polyFillMode);
+	this.state.polyfillmode = polyFillMode;
 };
 
 WMFJS.GDIContext.prototype.createBrush = function(brush) {
@@ -1463,11 +1528,45 @@ WMFJS.WMFRecords = function(reader, first) {
 					})(points)
 				);
 				break;
+			case WMFJS.GDI.RecordType.META_SETPOLYFILLMODE:
+				var polyfillmode = reader.readUint16();
+				this._records.push(
+					(function(polyfillmode) {
+						return function(gdi) {
+							gdi.setPolyFillMode(polyfillmode);
+						}
+					})(polyfillmode)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_POLYPOLYGON:
+				var polyPolygon = new WMFJS.PolyPolygon(reader);
+				this._records.push(
+					(function(polyPolygon) {
+						return function(gdi) {
+							gdi.polyPolygon(polyPolygon);
+						}
+					})(polyPolygon)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_POLYLINE:
+				var cnt = reader.readInt16();
+				var points = [];
+				while (cnt > 0) {
+					points.push(new WMFJS.PointS(reader));
+					cnt--;
+				}
+				this._records.push(
+					(function(points) {
+						return function(gdi) {
+							gdi.polyline(points);
+						}
+					})(points)
+				);
+				break;
 			case WMFJS.GDI.RecordType.META_REALIZEPALETTE:
 			case WMFJS.GDI.RecordType.META_SETPALENTRIES:
 			case WMFJS.GDI.RecordType.META_SETROP2:
 			case WMFJS.GDI.RecordType.META_SETRELABS:
-			case WMFJS.GDI.RecordType.META_SETPOLYFILLMODE:
 			case WMFJS.GDI.RecordType.META_SETTEXTCHAREXTRA:
 			case WMFJS.GDI.RecordType.META_RESIZEPALETTE:
 			case WMFJS.GDI.RecordType.META_DIBCREATEPATTERNBRUSH:
@@ -1477,7 +1576,6 @@ WMFJS.WMFRecords = function(reader, first) {
 			case WMFJS.GDI.RecordType.META_FILLREGION:
 			case WMFJS.GDI.RecordType.META_SETMAPPERFLAGS:
 			case WMFJS.GDI.RecordType.META_SELECTPALETTE:
-			case WMFJS.GDI.RecordType.META_POLYLINE:
 			case WMFJS.GDI.RecordType.META_SETTEXTJUSTIFICATION:
 			case WMFJS.GDI.RecordType.META_SETVIEWPORTORG:
 			case WMFJS.GDI.RecordType.META_SETVIEWPORTEXT:
@@ -1488,7 +1586,6 @@ WMFJS.WMFRecords = function(reader, first) {
 			case WMFJS.GDI.RecordType.META_FLOODFILL:
 			case WMFJS.GDI.RecordType.META_FRAMEREGION:
 			case WMFJS.GDI.RecordType.META_ANIMATEPALETTE:
-			case WMFJS.GDI.RecordType.META_POLYPOLYGON:
 			case WMFJS.GDI.RecordType.META_EXTFLOODFILL:
 			case WMFJS.GDI.RecordType.META_SETPIXEL:
 			case WMFJS.GDI.RecordType.META_ROUNDRECT:
