@@ -343,6 +343,15 @@ WMFJS.Blob.prototype.readInt16 = function() {
 	return val;
 };
 
+WMFJS.Blob.prototype.readString = function(length) {
+	if (this.pos + length > this.data.length)
+		throw new WMFJS.Error("Unexpected end of file");
+	var ret = "";
+	for (var i = 0; i < length; i++)
+		ret += String.fromCharCode(this.data[this.pos++] >>> 0);
+	return ret;
+};
+
 WMFJS.Blob.prototype.readNullTermString = function(maxSize) {
 	var ret = "";
 	if (maxSize > 0) {
@@ -401,6 +410,28 @@ WMFJS.PointS.prototype.clone = function() {
 
 WMFJS.PointS.prototype.toString = function() {
 	return "{x: " + this.x + ", y: " + this.y + "}";
+};
+
+WMFJS.Rect = function(reader, left, top, right, bottom) {
+	if (reader != null) {
+		this.left = reader.readInt16();
+		this.top = reader.readInt16();
+		this.right = reader.readInt16();
+		this.bottom = reader.readInt16();
+	} else {
+		this.left = left;
+		this.top = top;
+		this.right = right;
+		this.bottom = bottom;
+	}
+};
+
+WMFJS.Rect.prototype.clone = function() {
+	return new WMFJS.Rect(null, this.left, this.top, this.right, this.bottom);
+};
+
+WMFJS.Rect.prototype.toString = function() {
+	return "{left: " + this.left + ", top: " + this.top + ", right: " + this.right + ", bottom: " + this.bottom + "}";
 };
 
 WMFJS.Obj = function(type) {
@@ -713,6 +744,12 @@ WMFJS.GDIContextState = function(copy, defObjects) {
 		this.vy = copy.vy;
 		this.vw = copy.vw;
 		this.vh = copy.vh;
+		this.x = copy.x;
+		this.y = copy.y;
+		this.clip = {
+			exclude: copy.clip.exclude != null ? copy.clip.exclude.clone() : null,
+			intersect: copy.clip.intersect != null ? copy.clip.intersect.clone() : null
+		};
 		
 		this.selected = {};
 		for (var type in copy.selected)
@@ -733,6 +770,12 @@ WMFJS.GDIContextState = function(copy, defObjects) {
 		this.vy = 0;
 		this.vw = 0;
 		this.vh = 0;
+		this.x = 0;
+		this.y = 0;
+		this.clip = {
+			exclude: null,
+			intersect: null
+		};
 		
 		this.selected = {};
 		for (var type in defObjects)
@@ -757,12 +800,15 @@ WMFJS.GDIContext = function(svg) {
 WMFJS.GDIContext.prototype._pushGroup = function() {
 	if (this.state._svggroup == null) {
 		var settings = {
-			viewBox: [this.state.vx + this._todevX(0), this.state.vy + this._todevY(0), this.state.vw, this.state.vh].join(" "),
+			viewBox: [this.state.vx, this.state.vy, this.state.vw, this.state.vh].join(" "),
 			preserveAspectRatio: "none"
 		};
-		//this.state._svggroup = this._svg.group(WMFJS._makeUniqueId("wmfjs_grp"), settings);
+		console.log("[gdi] new svg x=" + this.state.vx + " y=" + this.state.vy + " width=" + this.state.vw + " height=" + this.state.vh);
+		console.log("[gdi] use clipping: intersect: "
+			+ (this.state.clip.intersect != null ? this.state.clip.intersect.toString() : "[none]") + ", exclude: "
+			+ (this.state.clip.exclude != null ? this.state.clip.exclude.toString() : "[none]"))
 		this.state._svggroup = this._svg.svg(this.state._svggroup,
-			this.state.vx, this.state.vy, this.state.vw, this.state.vh, this.state.vx, this.state.vy, this.state.vw, this.state.vh, settings);
+			this.state.vx, this.state.vy, this.state.vw, this.state.vh, settings);
 	}
 };
 
@@ -951,22 +997,99 @@ WMFJS.GDIContext.prototype.stretchDibBits = function(srcX, srcY, srcW, srcH, dst
 	this._svg.image(this.state._svggroup, dstX, dstY, dstW, dstH, dib.base64ref());
 };
 
+WMFJS.GDIContext.prototype._getFill = function() {
+	if (this.state.bkmode == WMFJS.GDI.MixMode.OPAQUE)
+		return "#" + this.state.bkcolor.toHex();
+	else if (this.state.selected.brush.style == WMFJS.GDI.BrushStyle.BS_SOLID)
+		return "#" + (this.state.selected.brush.color != null ? this.state.selected.brush.color.toHex() : this.state.bkcolor.toHex()); // TODO: brush styles
+	return "none";
+};
+
 WMFJS.GDIContext.prototype.rectangle = function(bottom, right, top, left) {
 	console.log("[gdi] rectangle: bottom=" + bottom + " right=" + right + " top=" + top + " left=" + left + " with pen " + this.state.selected.pen.toString() + " and brush " + this.state.selected.brush.toString());
-	var height = this._todevH(bottom - top);
-	var width = this._todevW(right - left);
+	bottom = this._todevY(bottom);
+	right = this._todevX(right);
 	top = this._todevY(top);
 	left = this._todevX(left);
-	console.log("[gdi] rectangle: TRANSLATED: height=" + height + " width=" + width + " top=" + top + " left=" + left);
+	console.log("[gdi] rectangle: TRANSLATED: bottom=" + bottom + " right=" + right + " top=" + top + " left=" + left);
+	this._pushGroup();
+	
+	var opts = {
+		fill: this._getFill(),
+		stroke: "#" + this.state.selected.pen.color.toHex(), // TODO: pen style
+		strokeWidth: this.state.selected.pen.width.x // TODO: is .y ever used?
+	};
+	this._svg.rect(this.state._svggroup, left, top, right - left, bottom - top, 0, 0, opts);
+};
+
+WMFJS.GDIContext.prototype.textOut = function(x, y, text) {
+	console.log("[gdi] textOut: x=" + x + " y=" + y + " text=" + text + " with font " + this.state.selected.font.toString());
+	x = this._todevX(x);
+	y = this._todevY(y);
+	console.log("[gdi] textOut: TRANSLATED: x=" + x + " y=" + y);
+	this._pushGroup();
+	
+	var opts = {
+		"font-family": this.state.selected.font.facename,
+		"font-size": this._todevH(Math.abs(this.state.selected.font.height)),
+	};
+	if (this.state.selected.font.escapement != 0) {
+		// Rotate around it's center...
+		opts.transform = "rotate(" + [(-this.state.selected.font.escapement / 10), x, y] + ")";
+		opts.style = "dominant-baseline: middle; text-anchor: start;";
+	}
+	this._svg.text(this.state._svggroup, x, y, text, opts);
+};
+
+WMFJS.GDIContext.prototype.lineTo = function(x, y) {
+	console.log("[gdi] lineTo: x=" + x + " y=" + y + " with pen " + this.state.selected.pen.toString());
+	x = this._todevX(x);
+	y = this._todevY(y);
+	var fromX = this._todevX(this.state.x);
+	var fromY = this._todevY(this.state.y);
+	console.log("[gdi] lineTo: TRANSLATED: x=" + x + " y=" + y + " fromX=" + fromX + " fromY=" + fromY);
 	this._pushGroup();
 	
 	var opts = {
 		stroke: "#" + this.state.selected.pen.color.toHex(), // TODO: pen style
-		strokeWidth: this.state.selected.pen.width.x // TODO: is .y ever used?
+		strokeWidth: this._todevW(this.state.selected.pen.width.x) // TODO: is .y ever used?
 	}
-	if (this.state.selected.brush.color != null)
-		opts.fill = "#" + this.state.selected.brush.color.toHex(); // TODO: brush style
-	this._svg.rect(this.state._svggroup, left, top, width, height, 0, 0, opts);
+	this._svg.line(this.state._svggroup, fromX, fromY, x, y, opts);
+}
+
+WMFJS.GDIContext.prototype.moveTo = function(x, y) {
+	console.log("[gdi] moveTo: x=" + x + " y=" + y);
+	this.state.x = x;
+	this.state.y = y;
+}
+
+WMFJS.GDIContext.prototype.polygon = function(points) {
+	console.log("[gdi] polygon: points=" + points + " with pen " + this.state.selected.pen.toString() + " and brush " + this.state.selected.brush.toString());
+	var pts = [];
+	for (var i = 0; i < points.length; i++) {
+		var point = points[i];
+		pts.push([this._todevX(point.x), this._todevY(point.y)]);
+	}
+	console.log("[gdi] polygon: TRANSLATED: pts=" + pts);
+	this._pushGroup();
+	var opts = {
+		fill: this._getFill(),
+		stroke: "#" + this.state.selected.pen.color.toHex(), // TODO: pen style
+		strokeWidth: this._todevW(this.state.selected.pen.width.x) // TODO: is .y ever used?
+	};
+	this._svg.polygon(this.state._svggroup, pts, opts);
+};
+
+WMFJS.GDIContext.prototype.excludeClipRect = function(rect) {
+	console.log("[gdi] excludeClipRect: rect=" + rect.toString());
+	this.state.clip.exclude = rect;
+	this.state._svggroup = null;
+};
+
+WMFJS.GDIContext.prototype.intersectClipRect = function(rect) {
+	console.log("[gdi] intersectClipRect: rect=" + rect.toString());
+	this.state.clip.intersect = rect;
+	this.state._svggroup = null;
 };
 
 WMFJS.GDIContext.prototype.setTextAlign = function(textAlignmentMode) {
@@ -1259,6 +1382,87 @@ WMFJS.WMFRecords = function(reader, first) {
 					})(bottom, right, top, left)
 				);
 				break;
+			case WMFJS.GDI.RecordType.META_LINETO:
+				var y = reader.readInt16();
+				var x = reader.readInt16();
+				this._records.push(
+					(function(y, x) {
+						return function(gdi) {
+							gdi.lineTo(x, y);
+						}
+					})(y, x)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_MOVETO:
+				var y = reader.readInt16();
+				var x = reader.readInt16();
+				this._records.push(
+					(function(y, x) {
+						return function(gdi) {
+							gdi.moveTo(x, y);
+						}
+					})(y, x)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_TEXTOUT:
+				var len = reader.readInt16();
+				if (len > 0) {
+					var text = reader.readString(len);
+					reader.skip(len % 2);
+					var y = reader.readInt16();
+					var x = reader.readInt16();
+					this._records.push(
+						(function(text, y, x) {
+							return function(gdi) {
+								gdi.textOut(x, y, text);
+							}
+						})(text, y, x)
+					);
+				}
+				break;
+			case WMFJS.GDI.RecordType.META_EXCLUDECLIPRECT:
+				var bottom = reader.readInt16();
+				var right = reader.readInt16();
+				var top = reader.readInt16();
+				var left = reader.readInt16();
+				var rect = new WMFJS.Rect(null, left, top, right, bottom);
+				this._records.push(
+					(function(rect) {
+						return function(gdi) {
+							gdi.excludeClipRect(rect);
+						}
+					})(rect)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_INTERSECTCLIPRECT:
+				var bottom = reader.readInt16();
+				var right = reader.readInt16();
+				var top = reader.readInt16();
+				var left = reader.readInt16();
+				var rect = new WMFJS.Rect(null, left, top, right, bottom);
+				this._records.push(
+					(function(rect) {
+						return function(gdi) {
+							gdi.intersectClipRect(rect);
+						}
+					})(rect)
+				);
+				break;
+			case WMFJS.GDI.RecordType.META_POLYGON:
+				var cnt = reader.readInt16();
+				var points = [];
+				while (cnt > 0) {
+					points.push(new WMFJS.PointS(reader));
+					cnt--;
+				}
+				this._records.push(
+					(function(points) {
+						return function(gdi) {
+							gdi.polygon(points);
+						}
+					})(points)
+				);
+				break;
 			case WMFJS.GDI.RecordType.META_REALIZEPALETTE:
 			case WMFJS.GDI.RecordType.META_SETPALENTRIES:
 			case WMFJS.GDI.RecordType.META_SETROP2:
@@ -1269,13 +1473,10 @@ WMFJS.WMFRecords = function(reader, first) {
 			case WMFJS.GDI.RecordType.META_DIBCREATEPATTERNBRUSH:
 			case WMFJS.GDI.RecordType.META_SETLAYOUT:
 			case WMFJS.GDI.RecordType.META_OFFSETVIEWPORTORG:
-			case WMFJS.GDI.RecordType.META_LINETO:
-			case WMFJS.GDI.RecordType.META_MOVETO:
 			case WMFJS.GDI.RecordType.META_OFFSETCLIPRGN:
 			case WMFJS.GDI.RecordType.META_FILLREGION:
 			case WMFJS.GDI.RecordType.META_SETMAPPERFLAGS:
 			case WMFJS.GDI.RecordType.META_SELECTPALETTE:
-			case WMFJS.GDI.RecordType.META_POLYGON:
 			case WMFJS.GDI.RecordType.META_POLYLINE:
 			case WMFJS.GDI.RecordType.META_SETTEXTJUSTIFICATION:
 			case WMFJS.GDI.RecordType.META_SETVIEWPORTORG:
@@ -1283,13 +1484,10 @@ WMFJS.WMFRecords = function(reader, first) {
 			case WMFJS.GDI.RecordType.META_OFFSETWINDOWORG:
 			case WMFJS.GDI.RecordType.META_SCALEWINDOWEXT:
 			case WMFJS.GDI.RecordType.META_SCALEVIEWPORTEXT:
-			case WMFJS.GDI.RecordType.META_EXCLUDECLIPRECT:
-			case WMFJS.GDI.RecordType.META_INTERSECTCLIPRECT:
 			case WMFJS.GDI.RecordType.META_ELLIPSE:
 			case WMFJS.GDI.RecordType.META_FLOODFILL:
 			case WMFJS.GDI.RecordType.META_FRAMEREGION:
 			case WMFJS.GDI.RecordType.META_ANIMATEPALETTE:
-			case WMFJS.GDI.RecordType.META_TEXTOUT:
 			case WMFJS.GDI.RecordType.META_POLYPOLYGON:
 			case WMFJS.GDI.RecordType.META_EXTFLOODFILL:
 			case WMFJS.GDI.RecordType.META_SETPIXEL:
