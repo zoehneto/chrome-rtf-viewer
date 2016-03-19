@@ -22,6 +22,8 @@ function stringToBinaryArray(string) {
 
 function renderDocument(data){
     try {
+        RTFJS.loggingEnabled = false;
+        WMFJS.loggingEnabled = false;
         var doc = new RTFJS.Document(stringToBinaryArray(data));
 
         //Set title if meta data available
