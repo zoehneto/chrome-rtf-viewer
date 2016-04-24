@@ -14,7 +14,8 @@ function isRtfFile(details) {
 
     if (contentType) {
         return (contentType.value === 'application/rtf' ||
-        contentType.value === 'text/rtf');
+            contentType.value === 'text/rtf' ||
+            (contentType.value.indexOf('text/plain') > -1 && details.url.endsWith('.rtf')));
     }
 }
 
