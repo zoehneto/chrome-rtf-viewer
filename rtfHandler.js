@@ -4,6 +4,13 @@ function getViewerURL(fileUrl) {
     return chrome.extension.getURL('viewer/viewer.html') + '?file=' + encodeURIComponent(fileUrl);
 }
 
+function contentTypeContains(contentType, string){
+    if(contentType.value.indexOf(string) > -1){
+        return true;
+    }
+    return false;
+}
+
 function isRtfFile(details) {
     var contentType = details.responseHeaders.find(function(element){
         if(element.name.toLowerCase() === 'content-type'){
@@ -13,9 +20,9 @@ function isRtfFile(details) {
     });
 
     if (contentType) {
-        return (contentType.value === 'application/rtf' ||
-            contentType.value === 'text/rtf' ||
-            (contentType.value.indexOf('text/plain') > -1 && details.url.endsWith('.rtf')));
+        return (contentTypeContains(contentType, 'application/rtf') ||
+            contentTypeContains(contentType, 'text/rtf') ||
+            (contentTypeContains(contentType, 'text/plain') && details.url.endsWith('.rtf')));
     }
 }
 
