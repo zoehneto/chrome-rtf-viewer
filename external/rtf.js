@@ -206,10 +206,11 @@ RTFJS.RenderChp.prototype.apply = function(doc, el) {
 		el.css("font-weight", "bold");
 	if (chp.italic)
 		el.css("font-style", "italic");
-	if (chp.fontfamily)
-		var fontFamily = doc._fonts[chp.fontfamily].fontname.replace(";","");
-		if(fontFamily !== "Symbol")
+	if (chp.fontfamily && doc._fonts[chp.fontfamily]) {
+		var fontFamily = doc._fonts[chp.fontfamily].fontname.replace(";", "");
+		if (fontFamily !== "Symbol")
 			el.css("font-family", fontFamily);
+	}
 		
 	var deco = [];
 	if (chp.underline != RTFJS.UNDERLINE.NONE)
@@ -1243,8 +1244,9 @@ RTFJS.Document.prototype.parse = function(blob, renderer) {
 			delete this._stylesheets;
 		};
 		cls.prototype.addSub = function(sub) {
-			if (this._stylesheets[sub.index] != null)
-				throw new RTFJS.Error("Cannot redefine stylesheet with index " + sub.index);
+			//Some documents will redefine stylesheets
+			// if (this._stylesheets[sub.index] != null)
+			// 	throw new RTFJS.Error("Cannot redefine stylesheet with index " + sub.index);
 			this._stylesheets[sub.index] = sub;
 		};
 		return cls;
