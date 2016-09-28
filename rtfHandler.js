@@ -22,7 +22,7 @@ function isRtfFile(details) {
     if (contentType) {
         return (contentTypeContains(contentType, 'application/rtf') ||
             contentTypeContains(contentType, 'text/rtf') ||
-            (contentTypeContains(contentType, 'text/plain') && details.url.endsWith('.rtf')));
+            details.url.toLowerCase().endsWith('.rtf'));
     }
 }
 
