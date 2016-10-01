@@ -11,6 +11,13 @@ function contentTypeContains(contentType, string){
     return false;
 }
 
+function urlIndicatesRtf(url){
+    if(url.indexOf('?') > -1){
+        url = url.substring(0, url.indexOf('?'));
+    }
+    return url.toLowerCase().endsWith('.rtf');
+}
+
 function isRtfFile(details) {
     var contentType = details.responseHeaders.find(function(element){
         if(element.name.toLowerCase() === 'content-type'){
@@ -23,7 +30,7 @@ function isRtfFile(details) {
         return (contentTypeContains(contentType, 'application/rtf') ||
             contentTypeContains(contentType, 'text/rtf') ||
             contentTypeContains(contentType, 'text/richtext') ||
-            details.url.toLowerCase().endsWith('.rtf'));
+            urlIndicatesRtf(details.url));
     }
 }
 
