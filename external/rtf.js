@@ -192,6 +192,9 @@ if (typeof RTFJS === "undefined") {
 		},
 		_twipsToPt: function(twips) {
 			return Math.floor(twips / 20);
+		},
+		_twipsToPx: function(twips) {
+			return Math.floor(twips / 20 * 96 / 72);
 		}
 	};
 }
@@ -1426,7 +1429,35 @@ RTFJS.Document.prototype.parse = function(blob, renderer) {
 			pichgoal: _setPropValueRequired("_displaysize", "height")
 		};
 		var _pictTypeHandler = {
-			emfblip: "", // TODO
+			emfblip: (function() {
+				if (typeof EMFJS !== "undefined") {
+					return function() {
+						return {
+							load: function() {
+								try {
+									return new EMFJS.Renderer(this._blob);
+								} catch(e) {
+									if (e instanceof EMFJS.Error)
+										return e.message;
+									else
+										throw e;
+								}
+							},
+							render: function(img) {
+								return img.render({
+									width: RTFJS._twipsToPt(this._displaysize.width) + "pt",
+									height: RTFJS._twipsToPt(this._displaysize.height) + "pt",
+									xExt: RTFJS._twipsToPx(this._displaysize.width),
+									yExt: RTFJS._twipsToPx(this._displaysize.height),
+									mapMode: 8
+								});
+							}
+						};
+					};
+				} else {
+					return "";
+				}
+			})(),
 			pngblip: "image/png",
 			jpegblip: "image/jpeg",
 			macpict: "", // TODO
@@ -1462,7 +1493,8 @@ RTFJS.Document.prototype.parse = function(blob, renderer) {
 					return "";
 				}
 			})(),
-			dibitmap: "" // TODO
+			dibitmap: "", // TODO
+			wbitmap: "" // TODO
 		};
 		cls.prototype.handleKeyword = function(keyword, param) {
 			var handler = _pictHandlers[keyword];
@@ -1646,6 +1678,7 @@ RTFJS.Document.prototype.parse = function(blob, renderer) {
 		headerl: requiredDestination("headerl"),
 		headerr: requiredDestination("headerr"),
 		pict: pictDestination(),
+		shppict: requiredDestination("shppict"),
 		private1: requiredDestination("private1"),
 		rxe: requiredDestination("rxe"),
 		tc: requiredDestination("tc"),
