@@ -15,10 +15,10 @@
   "web_accessible_resources": [
     "getFrameId",
     "viewer/viewer.html",
-    "http:/*",
-    "https:/*",
-    "ftp:/*",
-    "file:/*",
-    "chrome-extension:/*"
+    "http://*",
+    "https://*",
+    "ftp://*",
+    "file://*",
+    "chrome-extension://*"
   ]
 }
