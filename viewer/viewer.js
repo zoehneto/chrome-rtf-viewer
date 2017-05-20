@@ -51,13 +51,22 @@ function loadData(){
     var xhr = new XMLHttpRequest();
     xhr.open("GET", rtfUrl, true);
     xhr.onreadystatechange = function() {
+        if(xhr.readyState < 4) {
+            $("#main").text("Loading ...");
+        }
         if (xhr.readyState == 4) {
-            //Save data for later use
-            rtfData.name = rtfUrl.substring(rtfUrl.lastIndexOf("/") + 1);
-            rtfData.data = xhr.responseText;
+            //XHR requests for local files (file://) don't have a status
+            if ((xhr.status == 0 || (xhr.status >= 200 && xhr.status < 300))
+                && xhr.responseText && xhr.responseText != "") {
+                //Save data for later use
+                rtfData.name = rtfUrl.substring(rtfUrl.lastIndexOf("/") + 1);
+                rtfData.data = xhr.responseText;
 
-            //Render document
-            renderDocument(xhr.responseText);
+                //Render document
+                renderDocument(xhr.responseText);
+            } else{
+                $("#main").text("Error: File not Found");
+            }
         }
     };
     xhr.send();
