@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "RTF Viewer",
   "description": "Display .rtf (Rich Text Format) files in the browser",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "permissions": [
     "webRequest",
     "webRequestBlocking",
@@ -13,12 +13,6 @@
   },
   "incognito": "split",
   "web_accessible_resources": [
-    "getFrameId",
-    "viewer/viewer.html",
-    "http://*",
-    "https://*",
-    "ftp://*",
-    "file://*",
-    "chrome-extension://*"
+    "viewer/viewer.html"
   ]
 }
