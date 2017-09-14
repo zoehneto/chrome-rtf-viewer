@@ -29,7 +29,7 @@ function renderDocument(data){
 
         //Set title if meta data available
         var meta = doc.metadata();
-        if(meta.title !== undefined && meta.title !== ""){
+        if(meta.title && meta.title.trim() !== ""){
             document.title = meta.title;
         }else{
             document.title = rtfData.name;
