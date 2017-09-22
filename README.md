@@ -4,7 +4,7 @@ This chrome extension allows to view RTF (Rich Text Format) files in the browser
 You can install this extension from https://chrome.google.com/webstore/detail/rtf-viewer/djalaeippddcgflofefafkgijpefkjef
 
 # Support for other browsers
-This extension will be available for firefox as soon as Bug [1380186](https://bugzilla.mozilla.org/show_bug.cgi?id=1380186) is resolved (targeted for firefox 56).
+This extension is now also available for firefox at https://addons.mozilla.org/firefox/addon/rtf-viewer/
 
 # License
 This project is licensed under the MIT license. See the LICENSE file for details.
