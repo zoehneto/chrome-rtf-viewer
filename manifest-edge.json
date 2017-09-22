@@ -1,0 +1,22 @@
+{
+  "manifest_version": 2,
+  "author": "Tom Zoehner",
+  "name": "RTF Viewer",
+  "description": "Display .rtf (Rich Text Format) files in the browser",
+  "version": "1.2.3",
+  "permissions": [
+    "webRequest",
+    "webRequestBlocking",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["rtfHandler.js"],
+    "persistent": true
+  },
+  "web_accessible_resources": [
+    "viewer/viewer.html"
+  ],
+  "-ms-preload": {
+    "backgroundScript": "edge/backgroundScriptsAPIBridge.js"
+  }
+}

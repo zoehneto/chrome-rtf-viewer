@@ -1,10 +1,16 @@
 # chrome-rtf-viewer
-This chrome extension allows to view RTF (Rich Text Format) files in the browser and does so automatically when clicking any link to an RTF file. The RTF file is then automatically rendered in the same tab (similarly to the pdf preview feature of most browsers). This plugin does not depend on any external services to generate the preview.
+This extension allows to view RTF (Rich Text Format) files in the browser and does so automatically when clicking any link to an RTF file. The RTF file is then automatically rendered in the same tab (similarly to the pdf preview feature of most browsers). This plugin does not depend on any external services to generate the preview.
 
-You can install this extension from https://chrome.google.com/webstore/detail/rtf-viewer/djalaeippddcgflofefafkgijpefkjef
+# Browser Support
 
-# Support for other browsers
+## Chrome
+You can install the extension from the chrome web store at https://chrome.google.com/webstore/detail/rtf-viewer/djalaeippddcgflofefafkgijpefkjef
+
+## Firefox
 This extension is now also available for firefox at https://addons.mozilla.org/firefox/addon/rtf-viewer/
+
+## Edge
+There is experimental support for edge, for further details see EDGE.md
 
 # License
 This project is licensed under the MIT license. See the LICENSE file for details.
