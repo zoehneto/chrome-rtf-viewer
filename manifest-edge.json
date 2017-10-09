@@ -3,7 +3,7 @@
   "author": "Tom Zoehner",
   "name": "RTF Viewer",
   "description": "Display .rtf (Rich Text Format) files in the browser",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "permissions": [
     "webRequest",
     "webRequestBlocking",

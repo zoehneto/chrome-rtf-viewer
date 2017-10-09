@@ -36,7 +36,11 @@ function renderDocument(data){
         }
 
         //Display document
-        $("#main").empty().append(doc.render());
+        var mainElement = $("#main").empty();
+        var renderedElements = doc.render();
+        renderedElements.forEach(function(renderedElement){
+            mainElement.append(DOMPurify.sanitize(renderedElement[0], {SAFE_FOR_JQUERY: true}));
+        });
     }catch (error) {
         if (error instanceof RTFJS.Error) {
             $("#main").text("Error: " + error.message);
