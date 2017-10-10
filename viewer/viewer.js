@@ -42,8 +42,9 @@ function renderDocument(data){
             mainElement.append(DOMPurify.sanitize(renderedElement[0], {SAFE_FOR_JQUERY: true}));
         });
     }catch (error) {
-        if (error instanceof RTFJS.Error) {
+        if (error instanceof RTFJS.Error || error instanceof WMFJS.Error || error instanceof EMFJS.Error) {
             $("#main").text("Error: " + error.message);
+            console.error(error);
         } else {
             throw error;
         }
