@@ -1,1 +1,0 @@
-Due to differences between the manifest format of chrome and firefox, you have to replace the contents of the `manifest.json` file with the contents of the `manifest-firefox.json` file in order to use the extension with firefox.
