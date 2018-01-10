@@ -91,6 +91,11 @@ if (typeof RTFJS === "undefined") {
 			FIXED: 1,
 			VARIABLE: 2
 		},
+        CHARACTER_TYPE: {
+            LOWANSI: "loch",
+            HIGHANSI: "hich",
+            DOUBLE: "dbch"
+        },
 		
 		_isalpha: function(str) {
 			var len = str.length;
@@ -160,8 +165,35 @@ if (typeof RTFJS === "undefined") {
 		},
 		
 		_charsetMap: {
-			"0": "windows-1252",
-			// TODO
+			"0":   1252, // ANSI_CHARSET
+			"77":  10000, // Mac Roman
+			"78":  10001, // Mac Shift Jis
+			"79":  10003, // Mac Hangul
+			"80":  10008, // Mac GB2312
+			"81":  10002, // Mac Big5
+			"83":  10005, // Mac Hebrew
+			"84":  10004, // Mac Arabic
+			"85":  10006, // Mac Greek
+			"86":  10081, // Mac Turkish
+			"87":  10021, // Mac Thai
+			"88":  10029, // Mac East Europe
+			"89":  10007, // Mac Russian
+			"128": 932,  // SHIFTJIS_CHARSET
+			"129": 949,  // HANGEUL_CHARSET
+			"130": 1361, // JOHAB_CHARSET
+			"134": 936,  // GB2313_CHARSET
+			"136": 950,  // CHINESEBIG5_CHARSET
+			"161": 1253, // GREEK_CHARSET
+			"162": 1254, // TURKISH_CHARSET
+			"163": 1258, // VIETNAMESE_CHARSET
+			"177": 1255, // HEBREW_CHARSET
+			"178": 1256, // ARABIC_CHARSET
+			"186": 1257, // BALTIC_CHARSET
+			"204": 1251, // RUSSIAN_CHARSET
+			"222": 874,  // THAI_CHARSET
+			"238": 1250, // EE_CHARSET (Eastern European)
+			"254": 437,  // PC 437
+			"255": 850,  // OEM
 		},
 		_mapCharset: function(idx) {
 			return this._charsetMap[idx.toString()];
@@ -492,6 +524,7 @@ RTFJS.Document.prototype.parse = function(blob, renderer) {
 			this.justification = parent.justification;
 			this.spacebefore = parent.spacebefore;
 			this.spaceafter = parent.spaceafter;
+            this.charactertype = parent.charactertype;
 		} else {
 			this.indent = {
 				left: 0,
@@ -593,7 +626,7 @@ RTFJS.Document.prototype.parse = function(blob, renderer) {
 		readChar: function() {
 			if (this.pos < this.data.length) {
 				parser.column++;
-				return cptable[this.codepage].dec[this.data[this.pos++]];
+				return String.fromCharCode(this.data[this.pos++]);
 			}
 			
 			throw new RTFJS.Error("Unexpected end of file");
@@ -789,6 +822,9 @@ RTFJS.Document.prototype.parse = function(blob, renderer) {
 			cf: _genericFormatSetValRequired("chp", "colorindex"),
 			fs: _genericFormatSetValRequired("chp", "fontsize"),
 			f: _genericFormatSetValRequired("chp", "fontfamily"),
+            loch: _genericFormatSetNoParam("pap", "charactertype", RTFJS.CHARACTER_TYPE.LOWANSI),
+            hich: _genericFormatSetNoParam("pap", "charactertype", RTFJS.CHARACTER_TYPE.HIGHANSI),
+            dbch: _genericFormatSetNoParam("pap", "charactertype", RTFJS.CHARACTER_TYPE.DOUBLE),
 			strike: _genericFormatOnOff("chp", "strikethrough"),
 			striked: _genericFormatOnOff("chp", "dblstrikethrough"), // TODO: reject param == null in this particular case?
 			ul: _genericFormatOnOff("chp", "underline", RTFJS.UNDERLINE.CONTINUOUS, RTFJS.UNDERLINE.NONE),
@@ -1028,6 +1064,11 @@ RTFJS.Document.prototype.parse = function(blob, renderer) {
 							RTFJS.log("Unknown font charset: " + param);
 					}
 					return true;
+                case "cpg":
+                    if (param != null) {
+                        this.charset = param;
+                    }
+                    return true;
 			}
 			return false;
 		};
@@ -1927,12 +1968,27 @@ RTFJS.Document.prototype.parse = function(blob, renderer) {
 		var ch = parser.readChar();
 		if (!RTFJS._isalpha(ch)) {
 			if (ch == "\'") {
-				param = RTFJS._parseHex(parser.readChar() + parser.readChar())
+				var hex = parser.readChar() + parser.readChar();
+				if(parser.state.pap.charactertype === RTFJS.CHARACTER_TYPE.DOUBLE) {
+                    parser.readChar();
+                    parser.readChar();
+                    hex += parser.readChar() + parser.readChar();
+                }
+                param = RTFJS._parseHex(hex);
 				if (isNaN(param))
 					throw new RTFJS.Error("Could not parse hexadecimal number");
 				
-				if (process != null)
-					appendText(cptable[parser.codepage].dec[param]);
+				if (process != null) {
+					// Looking for current fonttbl charset
+					var codepage = parser.codepage;
+					if (parser.state.chp.hasOwnProperty("fontfamily")) {
+						idx = parser.state.chp.fontfamily;
+						if (inst._fonts != undefined && inst._fonts[idx] != null && inst._fonts[idx].charset != undefined)
+							codepage = inst._fonts[idx].charset;
+					}
+
+					appendText(cptable[codepage].dec[param]);
+				}
 			} else if (process != null) {
 				var text = process(ch, param);
 				if (text != null)
