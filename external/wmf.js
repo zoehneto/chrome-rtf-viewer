@@ -566,11 +566,13 @@ WMFJS.Brush = function(reader, copy, forceDibPattern) {
 					this.color = new WMFJS.ColorRef(reader);
 					break;
 				case WMFJS.GDI.BrushStyle.BS_PATTERN:
-					reader.skip(forceDibPattern ? 2 : 4);
+					reader.skip(forceDibPattern ? 2 : 6);
 					this.pattern = new WMFJS.Bitmap16(reader, dataLength - (reader.pos - start));
 					break;
 				case WMFJS.GDI.BrushStyle.BS_DIBPATTERNPT:
 					this.colorusage = forceDibPattern ? reader.readUint16() : reader.readUint32();
+					if (!forceDibPattern)
+						reader.skip(2);
 					this.dibpatternpt = new WMFJS.DIBitmap(reader, dataLength - (reader.pos - start));
 					break;
 				case WMFJS.GDI.BrushStyle.BS_HATCHED:
@@ -579,7 +581,7 @@ WMFJS.Brush = function(reader, copy, forceDibPattern) {
 					break;
 			}
 		} else if (forceDibPattern instanceof WMFJS.PatternBitmap16) {
-			this.style = MFJS.GDI.BrushStyle.BS_PATTERN;
+			this.style = WMFJS.GDI.BrushStyle.BS_PATTERN;
 			this.pattern = forceDibPattern;
 		}
 	} else {
@@ -812,7 +814,10 @@ WMFJS.Scan.prototype.toString = function() {
 WMFJS.Region = function(reader, copy) {
 	WMFJS.Obj.call(this, "region");
 	if (reader != null) {
-		reader.skip(8);
+		reader.skip(2);
+		if (reader.readInt16() != 6)
+			throw new WMFJS.Error("Invalid region identifier");
+		reader.skip(2);
 		var rgnSize = reader.readInt16();
 		var scanCnt = reader.readInt16();
 		reader.skip(2);
@@ -1240,7 +1245,7 @@ WMFJS.Bitmap16 = function(reader, size) {
 		this.bitsPixel = reader.readUint8();
 		this.bitsOffset = reader.pos;
 		this.bitsSize = (((this.width * this.bitsPixel + 15) >> 4) << 1) * this.height;
-		if (this.bitsSize != size - 10)
+		if (this.bitsSize > size - 10)
 			throw new WMFJS.Error("Bitmap should have " + this.bitsSize + " bytes, but has " + (size - 10));
 	} else {
 		var copy = size;
@@ -1281,23 +1286,6 @@ WMFJS.PatternBitmap16.prototype = Object.create(WMFJS.Bitmap16.prototype);
 
 WMFJS.PatternBitmap16.prototype.clone = function() {
 	return new WMFJS.PatternBitmap16(null, this);
-};
-
-WMFJS.PolyPolygon = function(reader) {
-	var polygonsCnt = reader.readUint16();
-	var polygonsPtCnts = [];
-	for (var i = 0; i < polygonsCnt; i++)
-		polygonsPtCnts.push(reader.readUint16());
-	
-	this._polygons = [];
-	for (var i = 0; i < polygonsCnt; i++) {
-		var ptCnt = polygonsPtCnts[i];
-		
-		var polygon = [];
-		for (var ip = 0; ip < ptCnt; ip++)
-			polygon.push(new WMFJS.PointS(reader));
-		this._polygons.push(polygon);
-	}
 };
 
 WMFJS.GDIContextState = function(copy, defObjects) {
@@ -1471,7 +1459,7 @@ WMFJS.GDIContext.prototype._getSvgPatternForBrush = function(brush) {
 	switch (brush.style) {
 		case WMFJS.GDI.BrushStyle.BS_PATTERN:
 			width = brush.pattern.getWidth();
-			height = brush.pattern.getheight();
+			height = brush.pattern.getHeight();
 			break;
 		case WMFJS.GDI.BrushStyle.BS_DIBPATTERNPT:
 			width = brush.dibpatternpt.getWidth();
@@ -1849,7 +1837,7 @@ WMFJS.GDIContext.prototype.moveTo = function(x, y) {
 	this.state.y = y;
 }
 
-WMFJS.GDIContext.prototype.polygon = function(points) {
+WMFJS.GDIContext.prototype.polygon = function(points, first) {
 	WMFJS.log("[gdi] polygon: points=" + points + " with pen " + this.state.selected.pen.toString() + " and brush " + this.state.selected.brush.toString());
 	var pts = [];
 	for (var i = 0; i < points.length; i++) {
@@ -1857,7 +1845,8 @@ WMFJS.GDIContext.prototype.polygon = function(points) {
 		pts.push([this._todevX(point.x), this._todevY(point.y)]);
 	}
 	WMFJS.log("[gdi] polygon: TRANSLATED: pts=" + pts);
-	this._pushGroup();
+	if (first)
+		this._pushGroup();
 	var opts = {
 		"fill-rule": this.state.polyfillmode == WMFJS.GDI.PolyFillMode.ALTERNATE ? "evenodd" : "nonzero",
 	};
@@ -1865,12 +1854,12 @@ WMFJS.GDIContext.prototype.polygon = function(points) {
 	this._svg.polygon(this.state._svggroup, pts, opts);
 };
 
-WMFJS.GDIContext.prototype.polyPolygon = function(polyPolygon) {
-	WMFJS.log("[gdi] polyPolygon: polyPolygon=" + JSON.stringify(polyPolygon) + " with pen " + this.state.selected.pen.toString() + " and brush " + this.state.selected.brush.toString());
-	this._pushGroup();
-	var cnt = polyPolygon._polygons.length;
+WMFJS.GDIContext.prototype.polyPolygon = function(polygons) {
+	WMFJS.log("[gdi] polyPolygon: polygons.length=" + polygons.length + " with pen " + this.state.selected.pen.toString() + " and brush " + this.state.selected.brush.toString());
+	
+	var cnt = polygons.length;
 	for (var i = 0; i < cnt; i++)
-		this.polygon(polyPolygon._polygons[i]);
+		this.polygon(polygons[i], i == 0);
 };
 
 WMFJS.GDIContext.prototype.polyline = function(points) {
@@ -2427,7 +2416,7 @@ WMFJS.WMFRecords = function(reader, first) {
 				this._records.push(
 					(function(points) {
 						return function(gdi) {
-							gdi.polygon(points);
+							gdi.polygon(points, true);
 						}
 					})(points)
 				);
@@ -2443,13 +2432,26 @@ WMFJS.WMFRecords = function(reader, first) {
 				);
 				break;
 			case WMFJS.GDI.RecordType.META_POLYPOLYGON:
-				var polyPolygon = new WMFJS.PolyPolygon(reader);
+				var cnt = reader.readUint16();
+				var polygonsPtCnts = [];
+				for (var i = 0; i < cnt; i++)
+					polygonsPtCnts.push(reader.readUint16());
+				
+				var polygons = [];
+				for (var i = 0; i < cnt; i++) {
+					var ptCnt = polygonsPtCnts[i];
+					
+					var p = [];
+					for (var ip = 0; ip < ptCnt; ip++)
+						p.push(new WMFJS.PointS(reader));
+					polygons.push(p);
+				}
 				this._records.push(
-					(function(polyPolygon) {
+					(function(polygons) {
 						return function(gdi) {
-							gdi.polyPolygon(polyPolygon);
+							gdi.polyPolygon(polygons);
 						}
-					})(polyPolygon)
+					})(polygons)
 				);
 				break;
 			case WMFJS.GDI.RecordType.META_POLYLINE:
@@ -2547,10 +2549,15 @@ WMFJS.WMFRecords = function(reader, first) {
 			case WMFJS.GDI.RecordType.META_BITBLT:
 			case WMFJS.GDI.RecordType.META_SETDIBTODEV:
 			case WMFJS.GDI.RecordType.META_DIBBITBLT:
-				WMFJS.log("[WMF] record 0x" + type.toString(16) + " at offset 0x" + curpos.toString(16) + " with " + (size * 2) + " bytes");
-				break;
 			default:
-				WMFJS.log("[WMF] UNKNOWN record 0x" + type.toString(16) + " at offset 0x" + curpos.toString(16) + " with " + (size * 2) + " bytes");
+				var recordName = "UNKNOWN";
+				for (var name in WMFJS.GDI.RecordType) {
+					if (WMFJS.GDI.RecordType[name] == type) {
+						recordName = name;
+						break;
+					}
+				}
+				WMFJS.log("[WMF] " + recordName + " record (0x" + type.toString(16) + ") at offset 0x" + curpos.toString(16) + " with " + (size * 2) + " bytes");
 				//throw new WMFJS.Error("Record type not recognized: 0x" + type.toString(16));
 				break;
 		}
@@ -2650,7 +2657,7 @@ WMFJS.Renderer.prototype.render = function(info) {
 				return inst._render.call(inst, svg, mapMode, xExt, yExt);
 			},
 			settings: {
-				viewBox: [0, 0, info.xExt, info.yExt].join(" "),
+				viewBox: [0, 0, xExt, yExt].join(" "),
 				preserveAspectRatio: "none" // TODO: MM_ISOTROPIC vs MM_ANISOTROPIC
 			}
 		});
