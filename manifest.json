@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "RTF Viewer",
   "description": "Display .rtf (Rich Text Format) files in the browser",
-  "version": "1.2.7",
+  "version": "1.2.8",
   "permissions": [
     "webRequest",
     "webRequestBlocking",
