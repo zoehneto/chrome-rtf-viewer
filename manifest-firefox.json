@@ -13,8 +13,12 @@
     "webRequestBlocking",
     "<all_urls>"
   ],
+  "browser_action": {},
   "background": {
-    "scripts": ["rtfHandler.js"]
+    "scripts": [
+      "background.js",
+      "rtfRedirectHandler.js"
+    ]
   },
   "incognito": "spanning",
   "web_accessible_resources": [

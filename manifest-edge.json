@@ -9,8 +9,12 @@
     "webRequestBlocking",
     "<all_urls>"
   ],
+  "browser_action": {},
   "background": {
-    "scripts": ["rtfHandler.js"],
+    "scripts": [
+      "background.js",
+      "rtfRedirectHandler.js"
+    ],
     "persistent": true
   },
   "web_accessible_resources": [
