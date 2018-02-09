@@ -8,7 +8,7 @@ class Rtf {
 class Viewer {
     constructor(rtf){
         this.rtf = rtf;
-        document.getElementById("download").addEventListener("click", this._downloadRtfFile);
+        document.getElementById("download").addEventListener("click", event => this._downloadRtfFile(event));
     }
 
     _stringToBinaryArray(string) {
