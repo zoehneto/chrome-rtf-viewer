@@ -36,6 +36,9 @@ a.button:active {
     color: white;
 }
 
+.hidden {
+    display: none;
+}
 
 /*
  * Display styles
