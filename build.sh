@@ -13,7 +13,8 @@ cp -R viewer/ build/chrome
 cp LICENSE build/chrome
 cp manifest.json build/chrome
 cp README.md build/chrome
-cp rtfHandler.js build/chrome
+cp rtfRedirectHandler.js build/chrome
+cp background.js build/chrome
 
 cd build/chrome
 zip -rq ../rtf-viewer-chrome.zip *
@@ -30,7 +31,8 @@ cp -R viewer/ build/firefox
 cp LICENSE build/firefox
 cp manifest-firefox.json build/firefox/manifest.json
 cp README.md build/firefox
-cp rtfHandler.js build/firefox
+cp rtfRedirectHandler.js build/firefox
+cp background.js build/firefox
 
 cd build/firefox
 zip -rq ../rtf-viewer-firefox.zip *
