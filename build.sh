@@ -10,6 +10,7 @@ mkdir -p build/chrome
 
 cp -R external/ build/chrome
 cp -R viewer/ build/chrome
+cp -R icons/ build/chrome
 cp LICENSE build/chrome
 cp manifest.json build/chrome
 cp README.md build/chrome
@@ -28,6 +29,7 @@ mkdir -p build/firefox
 
 cp -R external/ build/firefox
 cp -R viewer/ build/firefox
+cp -R icons/ build/firefox
 cp LICENSE build/firefox
 cp manifest-firefox.json build/firefox/manifest.json
 cp README.md build/firefox
