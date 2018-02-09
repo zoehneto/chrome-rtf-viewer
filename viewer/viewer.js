@@ -61,7 +61,7 @@ class Viewer {
 }
 
 
-function loadData(){
+function loadDataXhr(){
     var rtfUrl = decodeURIComponent(location.search.replace("?file=",""));
     var xhr = new XMLHttpRequest();
     xhr.open("GET", rtfUrl, true);
@@ -87,11 +87,32 @@ function loadData(){
     xhr.send();
 }
 
+function loadDataFileReader(file){
+    let reader = new FileReader();
+    reader.onload = function(event) {
+        const rtf = new Rtf(file.name, event.target.result);
+
+        //Render document
+        const viewer = new Viewer(rtf);
+        viewer.renderDocument();
+    };
+    reader.readAsText(file);
+}
+
 
 document.addEventListener('DOMContentLoaded', function(){
     if(location.search.startsWith("?file=")) {
         document.getElementById("main").classList.remove("hidden");
         document.getElementById("toolbar").classList.remove("hidden");
-        loadData();
+        loadDataXhr();
+    } else {
+        document.getElementById("file-upload").classList.remove("hidden");
+
+        document.getElementById("upload-field").addEventListener("change", function () {
+            document.getElementById("file-upload").classList.add("hidden");
+            document.getElementById("main").classList.remove("hidden");
+            document.getElementById("toolbar").classList.remove("hidden");
+            loadDataFileReader(this.files[0])
+        }, false)
     }
 }, true);
