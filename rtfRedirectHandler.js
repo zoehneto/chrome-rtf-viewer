@@ -78,7 +78,7 @@ chrome.webRequest.onBeforeRequest.addListener(
         return { redirectUrl: getViewerURL(details.url) };
     },
     {
-        urls: ['ftp://*/*.rtf'],
+        urls: ['ftp://*/*.rtf', 'file://*/*.RTF'],
         types: ['main_frame', 'sub_frame']
     },
     ['blocking']
@@ -89,7 +89,7 @@ chrome.webRequest.onBeforeRequest.addListener(
         return { redirectUrl: getViewerURL(details.url) };
     },
     {
-        urls: ['file://*/*.rtf'],
+        urls: ['file://*/*.rtf', 'file://*/*.RTF'],
         types: ['main_frame', 'sub_frame']
     },
     ['blocking']
