@@ -113,8 +113,19 @@ function loadDataXhr(){
             //XHR requests for local files (file://) don't have a status
             if ((xhr.status == 0 || (xhr.status >= 200 && xhr.status < 300))
                 && xhr.responseText && xhr.responseText != "") {
+                // Remove everything before the file name from the url
+                let rtfTitle = rtfUrl.substring(rtfUrl.lastIndexOf("/") + 1);
+                if(rtfTitle.includes("?")){
+                    // Remove trailing url parameters
+                    rtfTitle = rtfTitle.substring(0, rtfTitle.indexOf("?"));
+                }
+                // Make sure the file name has a .rtf extension
+                if(!rtfTitle.toLowerCase().endsWith(".rtf")){
+                    rtfTitle = rtfTitle + ".rtf";
+                }
+
                 //Save data for later use
-                const rtf = new Rtf(rtfUrl.substring(rtfUrl.lastIndexOf("/") + 1), xhr.responseText)
+                const rtf = new Rtf(rtfTitle, xhr.responseText);
 
                 //Render document
                 const viewer = new Viewer(rtf, rtfUrl.replace(/^(.*\/)[^\/]*$/, '$1'));
