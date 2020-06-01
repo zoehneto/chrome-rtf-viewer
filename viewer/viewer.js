@@ -76,15 +76,17 @@ class Viewer {
 
             //Display document
             doc.render().then(renderedElements => {
-                var mainElement = $("#main").empty();
-                renderedElements.forEach(function(renderedElement){
-                    mainElement.append(DOMPurify.sanitize(renderedElement[0], {SAFE_FOR_JQUERY: true}));
+                const mainElement = document.querySelector("#main");
+                while (mainElement.firstChild && !mainElement.firstChild.remove()) {
+                }
+                renderedElements.forEach(function (renderedElement) {
+                    mainElement.innerHTML += DOMPurify.sanitize(renderedElement);
                 });
             });
         }catch (error) {
             if (error instanceof RTFJS.Error || error instanceof WMFJS.Error || error instanceof EMFJS.Error) {
-                $("#main").text("Error: " + error.message);
-                console.error(error);
+                document.querySelector("#main").textContent = "Error: " + error.message;
+                throw error;
             } else {
                 throw error;
             }
@@ -107,7 +109,7 @@ function loadDataXhr(){
     xhr.open("GET", rtfUrl, true);
     xhr.onreadystatechange = function() {
         if(xhr.readyState < 4) {
-            $("#main").text("Loading ...");
+            document.querySelector("#main").textContent = "Loading ...";
         }
         if (xhr.readyState == 4) {
             //XHR requests for local files (file://) don't have a status
@@ -131,7 +133,7 @@ function loadDataXhr(){
                 const viewer = new Viewer(rtf, rtfUrl.replace(/^(.*\/)[^\/]*$/, '$1'));
                 viewer.renderDocument();
             } else{
-                $("#main").text("Error: File not Found");
+                document.querySelector("#main").textContent = "Error: File not Found";
             }
         }
     };
