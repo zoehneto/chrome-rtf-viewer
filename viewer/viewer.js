@@ -6,51 +6,51 @@ class Rtf {
 }
 
 class Viewer {
-    constructor(rtf, baseUrl){
+    constructor(rtf, baseUrl) {
         this.rtf = rtf;
         this.baseUrl = baseUrl;
         document.getElementById("download").addEventListener("click", event => this._downloadRtfFile(event));
     }
 
     _stringToBinaryArray(string) {
-        var buffer = new ArrayBuffer(string.length);
-        var bufferView = new Uint8Array(buffer);
-        for (var i=0; i<string.length; i++) {
+        const buffer = new ArrayBuffer(string.length);
+        const bufferView = new Uint8Array(buffer);
+        for (let i = 0; i < string.length; i++) {
             bufferView[i] = string.charCodeAt(i);
         }
         return buffer;
     }
 
-    renderDocument(){
+    renderDocument() {
         try {
             RTFJS.loggingEnabled(false);
             WMFJS.loggingEnabled(false);
             EMFJS.loggingEnabled(false);
 
-            var baseUrl = this.baseUrl;
+            const baseUrl = this.baseUrl;
 
-            var settings = {
-                onImport: function(relURL, cb) {
+            const settings = {
+                onImport: function (relURL, cb) {
                     const file = baseUrl + relURL;
-                    const ext  = relURL.replace(/^.*\.([^\.]+)$/, '$1').toLowerCase();
+                    const ext = relURL.replace(/^.*\.([^\.]+)$/, "$1").toLowerCase();
                     let keyword;
-                    switch(ext) {
-                        case 'emf':
-                            keyword = 'emfblip';
+                    switch (ext) {
+                        case "emf":
+                            keyword = "emfblip";
                             break;
-                        case 'wmf':
-                            keyword = 'wmetafile';
+                        case "wmf":
+                            keyword = "wmetafile";
                             break;
                         default:
                             return cb({error});
                     }
 
-                    var request = new XMLHttpRequest();
+                    const request = new XMLHttpRequest();
                     request.open("GET", file, true);
                     request.responseType = "arraybuffer";
 
                     request.onload = function (event) {
-                        var blob = request.response;
+                        const blob = request.response;
                         if (blob) {
                             let height = 300;
                             cb({keyword, blob, height});
@@ -62,15 +62,15 @@ class Viewer {
 
                     request.send(null);
                 }
-            }
+            };
 
-            var doc = new RTFJS.Document(this._stringToBinaryArray(this.rtf.data), settings);
+            const doc = new RTFJS.Document(this._stringToBinaryArray(this.rtf.data), settings);
 
             //Set title if meta data available
-            var meta = doc.metadata();
-            if(meta.title && meta.title.trim() !== ""){
+            const meta = doc.metadata();
+            if (meta.title && meta.title.trim() !== "") {
                 document.title = meta.title;
-            }else{
+            } else {
                 document.title = this.rtf.name;
             }
 
@@ -83,7 +83,7 @@ class Viewer {
                     mainElement.innerHTML += DOMPurify.sanitize(renderedElement);
                 });
             });
-        }catch (error) {
+        } catch (error) {
             if (error instanceof RTFJS.Error || error instanceof WMFJS.Error || error instanceof EMFJS.Error) {
                 document.querySelector("#main").textContent = "Error: " + error.message;
                 throw error;
@@ -93,36 +93,36 @@ class Viewer {
         }
     }
 
-    _downloadRtfFile(event){
-        var blob = new Blob([this.rtf.data], {type: "text/rtf"});
-        var url = URL.createObjectURL(blob);
-        var a = event.target;
+    _downloadRtfFile(event) {
+        const blob = new Blob([this.rtf.data], {type: "text/rtf"});
+        const url = URL.createObjectURL(blob);
+        const a = event.target;
         a.href = url;
         a.download = this.rtf.name;
     }
 }
 
 
-function loadDataXhr(){
-    var rtfUrl = decodeURIComponent(location.search.replace("?file=",""));
-    var xhr = new XMLHttpRequest();
+function loadDataXhr() {
+    const rtfUrl = decodeURIComponent(location.search.replace("?file=", ""));
+    const xhr = new XMLHttpRequest();
     xhr.open("GET", rtfUrl, true);
-    xhr.onreadystatechange = function() {
-        if(xhr.readyState < 4) {
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState < 4) {
             document.querySelector("#main").textContent = "Loading ...";
         }
-        if (xhr.readyState == 4) {
+        if (xhr.readyState === 4) {
             //XHR requests for local files (file://) don't have a status
-            if ((xhr.status == 0 || (xhr.status >= 200 && xhr.status < 300))
-                && xhr.responseText && xhr.responseText != "") {
+            if ((xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300))
+                && xhr.responseText && xhr.responseText !== "") {
                 // Remove everything before the file name from the url
                 let rtfTitle = rtfUrl.substring(rtfUrl.lastIndexOf("/") + 1);
-                if(rtfTitle.includes("?")){
+                if (rtfTitle.includes("?")) {
                     // Remove trailing url parameters
                     rtfTitle = rtfTitle.substring(0, rtfTitle.indexOf("?"));
                 }
                 // Make sure the file name has a .rtf extension
-                if(!rtfTitle.toLowerCase().endsWith(".rtf")){
+                if (!rtfTitle.toLowerCase().endsWith(".rtf")) {
                     rtfTitle = rtfTitle + ".rtf";
                 }
 
@@ -130,9 +130,9 @@ function loadDataXhr(){
                 const rtf = new Rtf(rtfTitle, xhr.responseText);
 
                 //Render document
-                const viewer = new Viewer(rtf, rtfUrl.replace(/^(.*\/)[^\/]*$/, '$1'));
+                const viewer = new Viewer(rtf, rtfUrl.replace(/^(.*\/)[^\/]*$/, "$1"));
                 viewer.renderDocument();
-            } else{
+            } else {
                 document.querySelector("#main").textContent = "Error: File not Found";
             }
         }
@@ -140,9 +140,9 @@ function loadDataXhr(){
     xhr.send();
 }
 
-function loadDataFileReader(file){
+function loadDataFileReader(file) {
     let reader = new FileReader();
-    reader.onload = function(event) {
+    reader.onload = function (event) {
         const rtf = new Rtf(file.name, event.target.result);
 
         //Render document
@@ -153,8 +153,8 @@ function loadDataFileReader(file){
 }
 
 
-document.addEventListener('DOMContentLoaded', function(){
-    if(location.search.startsWith("?file=")) {
+document.addEventListener("DOMContentLoaded", function () {
+    if (location.search.startsWith("?file=")) {
         document.getElementById("main").classList.remove("hidden");
         document.getElementById("toolbar").classList.remove("hidden");
         loadDataXhr();
