@@ -1,1 +1,0 @@
-Due to differences between the manifest format of chrome and edge, you have to replace the contents of the `manifest.json` file with the contents of the `manifest-edge.json` file in order to use the extension with edge. You also have to include the `edge` folder (contains chrome extension compatibility scripts for edge) when publishing the extension for edge.

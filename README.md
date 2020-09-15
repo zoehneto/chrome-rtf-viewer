@@ -9,9 +9,6 @@ You can install the extension from the chrome web store at https://chrome.google
 ## Firefox
 This extension is now also available for firefox at https://addons.mozilla.org/firefox/addon/rtf-viewer/
 
-## Edge
-There is experimental support for edge, for further details see EDGE.md
-
 # License
 This project is licensed under the MIT license. See the LICENSE file for details.
 
